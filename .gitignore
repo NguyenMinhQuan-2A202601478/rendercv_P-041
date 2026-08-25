@@ -198,3 +198,12 @@ mkdocs-material/
 scripts/ats_proof/rendered/
 scripts/ats_proof/results/
 scripts/ats_proof/analysis/
+
+# Harness core maintenance binary
+scripts/bin/harness
+scripts/bin/harness.exe
+
+# Graphify machine-local sidecars
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/cache/

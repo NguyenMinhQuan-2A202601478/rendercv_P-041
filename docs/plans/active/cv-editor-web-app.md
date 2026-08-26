@@ -162,7 +162,16 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   on localhost:5173). Follow-up noted: backend returns an unhandled 500
   when a design document lacks its `theme` discriminator — client avoids
   it; fix server-side in a later phase.
-- [ ] Phase 4: auth, persistence, autosave, multi-CV sidebar.
+- [x] Phase 4: persistence with anonymous device sessions (option A).
+  Verified 2026-08-27: SQLAlchemy+alembic (users/cvs/cv_versions/
+  preferences, conditional-update 409 protocol), session-cookie API
+  (/api/cvs CRUD, duplicate, versions/restore, preferences), real
+  sidebar + 1.5s autosave + conflict bar + reload persistence. Core
+  fix: design discriminated-union KeyError on missing theme -> proper
+  422 (regression-tested). E2E flakiness from async bootstrap fixed
+  properly (startPaused controllers + data-app-ready + gotoReady):
+  13/13 x5 consecutive runs. Gates: backend 74/74, Vitest 234/234,
+  core 1538 passed, just check clean. OAuth seam left in schema.
 - [ ] Phase 5: WASM preview, undo/redo, landing page, polish.
 
 ## Decisions

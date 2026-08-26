@@ -21,6 +21,8 @@ from rendercv.exception import (
 
 from .documents import DocumentPatchError
 from .models import (
+    CvConflictCurrent,
+    CvConflictResponse,
     InternalErrorResponse,
     PatchOpErrorDetail,
     PatchOpErrorResponse,
@@ -29,6 +31,26 @@ from .models import (
 )
 
 logger = logging.getLogger("rendercv_web")
+
+
+class CvConflictError(Exception):
+    """Raised when an autosave write loses the optimistic-concurrency check.
+
+    Why:
+        Translated into a `409` carrying the server's current state (see
+        `cvs.py`) so the client can reconcile instead of silently
+        overwriting -- or being silently overwritten by -- a concurrent
+        write (guardrail: no last-write-wins).
+    """
+
+    def __init__(self, current: CvConflictCurrent) -> None:
+        """Store the current server-side state to return to the client.
+
+        Args:
+            current: The CV's current `updated_at` and documents.
+        """
+        super().__init__("Autosave conflict: the CV changed since it was last read.")
+        self.current = current
 
 
 def validation_error_to_item(error: RenderCVValidationError) -> ValidationErrorItem:
@@ -94,6 +116,15 @@ def register_exception_handlers(app: FastAPI) -> None:
             error=PatchOpErrorDetail(op_index=exc.op_index, message=exc.message)
         )
         return JSONResponse(status_code=400, content=body.model_dump())
+
+    @app.exception_handler(CvConflictError)
+    async def handle_cv_conflict_error(
+        request: Request, exc: CvConflictError
+    ) -> JSONResponse:
+        """Translate a lost autosave race into a 409 with the current state."""
+        del request
+        body = CvConflictResponse(current=exc.current)
+        return JSONResponse(status_code=409, content=body.model_dump(mode="json"))
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

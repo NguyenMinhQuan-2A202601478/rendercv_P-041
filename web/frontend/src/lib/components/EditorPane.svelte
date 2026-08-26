@@ -16,15 +16,28 @@
 	import LocaleForm from '$lib/components/form/LocaleForm.svelte';
 	import SettingsForm from '$lib/components/form/SettingsForm.svelte';
 	import ThemeSwitcher from '$lib/components/form/ThemeSwitcher.svelte';
+	import AutosaveStatus from '$lib/components/AutosaveStatus.svelte';
+	import type { AutosaveState } from '$lib/persistence/autosave';
 
 	let {
 		previewState,
 		errors = [],
-		zoom = $bindable(100)
-	}: { previewState: Readable<PreviewState>; errors?: ValidationError[]; zoom?: number } = $props();
+		zoom = $bindable(100),
+		yamlMode = $bindable(true),
+		autosaveState,
+		onResolveConflict = () => {},
+		onRetrySave = () => {}
+	}: {
+		previewState: Readable<PreviewState>;
+		errors?: ValidationError[];
+		zoom?: number;
+		yamlMode?: boolean;
+		autosaveState: Readable<AutosaveState>;
+		onResolveConflict?: (action: 'reload' | 'overwrite') => void;
+		onRetrySave?: () => void;
+	} = $props();
 
 	let activeTab = $state<DocumentKey>('cv');
-	let yamlMode = $state(true);
 	let yamlEditor: ReturnType<typeof YamlEditor> | undefined = $state();
 	let canUndo = $state(false);
 	let canRedo = $state(false);
@@ -120,7 +133,7 @@
 
 <section class="flex h-full flex-col" aria-label="CV editor">
 	<div
-		class="flex items-center justify-between border-b border-neutral-200 px-3 py-2 dark:border-neutral-800"
+		class="flex flex-wrap items-center justify-between gap-y-1 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800"
 	>
 		<div role="tablist" aria-label="CV sections" class="flex gap-1">
 			{#each DOCUMENT_KEYS as key (key)}
@@ -146,6 +159,8 @@
 		</div>
 
 		<div class="flex items-center gap-4">
+			<AutosaveStatus state={autosaveState} onRetry={onRetrySave} />
+
 			<ThemeSwitcher {themeNames} {currentTheme} onSwitch={switchTheme} />
 
 			<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
@@ -267,6 +282,45 @@
 			</button>
 		</div>
 	</div>
+
+	{#if $autosaveState.status === 'conflict'}
+		<div
+			role="alert"
+			class="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
+		>
+			<span>CV này đã thay đổi ở nơi khác.</span>
+			<div class="flex items-center gap-2">
+				<button
+					type="button"
+					class="rounded-md border border-amber-400 px-2.5 py-1 font-medium hover:bg-amber-100 dark:hover:bg-amber-900"
+					onclick={() => onResolveConflict?.('reload')}
+				>
+					Tải bản mới
+				</button>
+				<button
+					type="button"
+					class="rounded-md bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700"
+					onclick={() => onResolveConflict?.('overwrite')}
+				>
+					Ghi đè
+				</button>
+			</div>
+		</div>
+	{:else if $autosaveState.status === 'error'}
+		<div
+			role="alert"
+			class="flex items-center justify-between gap-3 border-b border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+		>
+			<span>Could not save your changes.</span>
+			<button
+				type="button"
+				class="rounded-md border border-red-400 px-2.5 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900"
+				onclick={() => onRetrySave?.()}
+			>
+				Retry
+			</button>
+		</div>
+	{/if}
 
 	<div class="flex-1 overflow-auto p-3">
 		<div

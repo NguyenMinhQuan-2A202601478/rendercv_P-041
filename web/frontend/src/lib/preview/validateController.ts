@@ -18,10 +18,14 @@ export interface ValidateControllerOptions {
 	validate?: (docs: CvDocuments) => Promise<ValidateResult>;
 	setTimeoutFn?: typeof setTimeout;
 	clearTimeoutFn?: typeof clearTimeout;
+	/** If true, the controller does not subscribe to `source` until `activate()` is called -- see `RenderControllerOptions.startPaused` for why. Defaults to `false`. */
+	startPaused?: boolean;
 }
 
 export interface ValidateController {
 	state: Writable<ValidationState>;
+	/** Starts reacting to `source` (scheduling a validation for its current value). No-op if already active; only relevant when created with `startPaused: true`. */
+	activate: () => void;
 	destroy: () => void;
 }
 
@@ -47,7 +51,8 @@ export function createValidateController(
 		debounceMs = 800,
 		validate = validateDocuments,
 		setTimeoutFn = setTimeout,
-		clearTimeoutFn = clearTimeout
+		clearTimeoutFn = clearTimeout,
+		startPaused = false
 	} = options;
 
 	const state = writable<ValidationState>(initialState());
@@ -71,14 +76,21 @@ export function createValidateController(
 		}, debounceMs);
 	}
 
-	const unsubscribe = source.subscribe((docs) => {
-		scheduleValidate(docs);
-	});
+	let unsubscribe: (() => void) | null = null;
+
+	function activate(): void {
+		if (unsubscribe) return; // already active
+		unsubscribe = source.subscribe((docs) => {
+			scheduleValidate(docs);
+		});
+	}
+
+	if (!startPaused) activate();
 
 	function destroy(): void {
 		if (timer) clearTimeoutFn(timer);
-		unsubscribe();
+		unsubscribe?.();
 	}
 
-	return { state, destroy };
+	return { state, activate, destroy };
 }

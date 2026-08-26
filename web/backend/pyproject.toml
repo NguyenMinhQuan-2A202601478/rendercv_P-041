@@ -12,6 +12,8 @@ dependencies = [
   "fastapi>=0.121.2",
   "uvicorn>=0.38.0",
   "rendercv[full]",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14.0",
 ]
 
 [dependency-groups]

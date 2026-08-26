@@ -115,4 +115,40 @@ describe('createValidateController', () => {
 		expect(get(controller.state).errors).toEqual([]);
 		controller.destroy();
 	});
+
+	it('startPaused: does not react to the source until activate() is called', async () => {
+		const source = writable<CvDocuments>(docs());
+		const validate = vi.fn(async (): Promise<ValidateResult> => ({ ok: true }));
+		const controller = createValidateController(source, { debounceMs: 800, validate, startPaused: true });
+
+		// A change before activation must not schedule anything, even given plenty of time.
+		source.set(docs('cv:\n  name: Placeholder\n'));
+		vi.advanceTimersByTime(5000);
+		expect(validate).not.toHaveBeenCalled();
+
+		controller.activate();
+		// activate() itself doesn't validate synchronously -- it starts
+		// reacting to subsequent (and, via the subscribe-on-activate contract,
+		// the store's *current* value) changes on the normal debounce.
+		vi.advanceTimersByTime(800);
+		await vi.waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+		expect(validate).toHaveBeenCalledWith(docs('cv:\n  name: Placeholder\n'));
+
+		controller.destroy();
+	});
+
+	it('startPaused: activate() is idempotent (a second call does not double-subscribe)', async () => {
+		const source = writable<CvDocuments>(docs());
+		const validate = vi.fn(async (): Promise<ValidateResult> => ({ ok: true }));
+		const controller = createValidateController(source, { debounceMs: 800, validate, startPaused: true });
+
+		controller.activate();
+		controller.activate();
+
+		source.set(docs('cv:\n  name: Once\n'));
+		vi.advanceTimersByTime(800);
+		await vi.waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+
+		controller.destroy();
+	});
 });

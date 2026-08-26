@@ -9,6 +9,8 @@
  * a request storm across every field.
  */
 
+import { apiFetch } from '$lib/api/http';
+
 export interface ThemeInfo {
 	name: string;
 	design_defaults: Record<string, unknown>;
@@ -18,7 +20,7 @@ let cached: ThemeInfo[] | null = null;
 let inFlight: Promise<ThemeInfo[]> | null = null;
 
 export async function fetchThemes(
-	fetchImpl: typeof fetch = fetch,
+	fetchImpl: typeof fetch = apiFetch,
 	options: { force?: boolean } = {}
 ): Promise<ThemeInfo[]> {
 	if (cached && !options.force) return cached;

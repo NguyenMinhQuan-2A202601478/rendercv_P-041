@@ -8,6 +8,8 @@ Why:
 
 import concurrent.futures
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response
@@ -17,10 +19,12 @@ from rendercv.schema.rendercv_model_builder import read_yaml_with_validation_err
 
 from .cache import cache_key_for, render_cache
 from .core import CvDocuments, render_documents_to_pdf, validate_documents
+from .cvs import router as cvs_router
+from .db.migrate import upgrade_to_head
 from .documents import apply_patch_ops, to_json_safe
 from .errors import register_exception_handlers
+from .limits import enforce_documents_size_cap, enforce_yaml_size_cap
 from .models import (
-    MAX_DOCUMENT_BYTES,
     CvDocumentsRequest,
     ParseRequest,
     ParseResponse,
@@ -29,6 +33,7 @@ from .models import (
     ThemeInfo,
     ValidResponse,
 )
+from .preferences import router as preferences_router
 from .schema import load_schema
 from .themes import list_theme_defaults
 
@@ -36,16 +41,41 @@ logger = logging.getLogger("rendercv_web")
 
 RENDER_TIMEOUT_SECONDS = 30.0
 
-app = FastAPI(title="RenderCV Web Editor API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Bring the target database up to the latest schema before serving.
+
+    Why:
+        The dev-DB creation path approved in the plan
+        (docs/plans/active/cv-editor-web-app.md, Phase 4): `uvicorn` must
+        start cleanly against a brand-new or behind-head database with no
+        manual `alembic upgrade head` step. `upgrade_to_head` is idempotent
+        (see `db/migrate.py`), so this runs the same way on every startup
+        regardless of whether `RENDERCV_WEB_DATABASE_URL` is set.
+
+    Args:
+        app: The FastAPI application (required by the lifespan protocol,
+            unused here).
+    """
+    del app
+    upgrade_to_head()
+    yield
+
+
+app = FastAPI(title="RenderCV Web Editor API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 register_exception_handlers(app)
+app.include_router(cvs_router)
+app.include_router(preferences_router)
 
 # Renders run in a bounded thread pool so a slow Typst compile can be given
 # a hard timeout (guardrails: "timeouts on all external calls") instead of
@@ -53,40 +83,6 @@ register_exception_handlers(app)
 render_executor = concurrent.futures.ThreadPoolExecutor(
     max_workers=4, thread_name_prefix="rendercv-render"
 )
-
-
-def enforce_yaml_size_cap(yaml_text: str, field_name: str = "yaml") -> None:
-    """Reject a single YAML document over the size cap before it reaches the core.
-
-    Why:
-        Guardrails ("trust no one"): request bodies are attacker-controlled;
-        cap sizes explicitly rather than assuming the client behaves.
-
-    Args:
-        yaml_text: The document text to check.
-        field_name: Name to report in the error detail.
-
-    Raises:
-        HTTPException: 413 if `yaml_text` exceeds `MAX_DOCUMENT_BYTES`.
-    """
-    if len(yaml_text.encode("utf-8")) > MAX_DOCUMENT_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"`{field_name}` exceeds the {MAX_DOCUMENT_BYTES} byte limit.",
-        )
-
-
-def enforce_document_size_cap(request: CvDocumentsRequest) -> None:
-    """Reject any single document over the size cap before it reaches the core.
-
-    Args:
-        request: The four YAML documents from the client.
-
-    Raises:
-        HTTPException: 413 if any document exceeds `MAX_DOCUMENT_BYTES`.
-    """
-    for field_name, value in request.model_dump().items():
-        enforce_yaml_size_cap(value, field_name)
 
 
 def to_documents(request: CvDocumentsRequest) -> CvDocuments:
@@ -119,7 +115,7 @@ def validate(request: CvDocumentsRequest) -> ValidResponse:
     Raises:
         HTTPException: 413 if a document exceeds the size cap.
     """
-    enforce_document_size_cap(request)
+    enforce_documents_size_cap(request.model_dump())
     validate_documents(to_documents(request))
     return ValidResponse()
 
@@ -143,7 +139,7 @@ def render(request: CvDocumentsRequest) -> Response:
         HTTPException: 413 if a document exceeds the size cap, 504 if the
             render exceeds the timeout.
     """
-    enforce_document_size_cap(request)
+    enforce_documents_size_cap(request.model_dump())
     documents = to_documents(request)
     key = cache_key_for(documents)
 

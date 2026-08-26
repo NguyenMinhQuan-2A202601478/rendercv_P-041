@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { gotoReady } from './helpers';
 
 /**
  * End-to-end coverage for the Phase 2 schema-driven form editor: the YAML
@@ -26,7 +27,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 async function switchToFormMode(page: Page): Promise<void> {
-	await page.goto('/');
+	await gotoReady(page);
 
 	// Wait for the app to actually be interactive before clicking anything.
 	// Why: on a cold dev-server start, SvelteKit's client bundle can take a

@@ -1,5 +1,6 @@
 import type { CvDocuments } from '$lib/stores/documents';
 import { parseValidationErrors, type ValidationError } from '$lib/api/validate';
+import { apiFetch } from '$lib/api/http';
 
 export type { ValidationError } from '$lib/api/validate';
 
@@ -16,7 +17,7 @@ export type RenderResult =
  */
 export async function renderPreview(
 	docs: CvDocuments,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = apiFetch
 ): Promise<RenderResult> {
 	const response = await fetchImpl('/api/render', {
 		method: 'POST',

@@ -1,4 +1,5 @@
 import type { CvDocuments } from '$lib/stores/documents';
+import { apiFetch } from '$lib/api/http';
 
 /** Which of the four YAML documents a validation error came from. */
 export type YamlSource = 'main_yaml_file' | 'design_yaml_file' | 'locale_yaml_file' | 'settings_yaml_file';
@@ -53,7 +54,7 @@ export function parseValidationErrors(body: unknown): ValidationError[] {
  */
 export async function validateDocuments(
 	docs: CvDocuments,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = apiFetch
 ): Promise<ValidateResult> {
 	const response = await fetchImpl('/api/validate', {
 		method: 'POST',

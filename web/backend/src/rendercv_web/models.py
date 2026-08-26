@@ -5,6 +5,7 @@ Why:
     pydantic model before it reaches the `rendercv` core pipeline.
 """
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 import pydantic
@@ -195,3 +196,107 @@ class PatchOpErrorResponse(pydantic.BaseModel):
     """Response body for a failed `POST /api/documents/patch` (400)."""
 
     error: PatchOpErrorDetail
+
+
+class CvDocumentsPayload(pydantic.BaseModel):
+    """The four YAML documents belonging to one persisted CV.
+
+    Why:
+        Same four fields as `CvDocumentsRequest`, but named for the
+        persistence endpoints (`cvs.py`) which nest this under a
+        `documents` key rather than accepting it as the whole request body.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    cv_yaml: str = pydantic.Field(description="The `cv:` YAML document.")
+    design_yaml: str = pydantic.Field(
+        default="", description="The `design:` YAML document, or empty."
+    )
+    locale_yaml: str = pydantic.Field(
+        default="", description="The `locale:` YAML document, or empty."
+    )
+    settings_yaml: str = pydantic.Field(
+        default="", description="The `settings:` YAML document, or empty."
+    )
+
+
+class CvSummary(pydantic.BaseModel):
+    """One row of `GET /api/cvs`: enough to render the CV list sidebar."""
+
+    id: int
+    name: str
+    updated_at: datetime
+
+
+class CvDetail(CvSummary):
+    """A full CV: `CvSummary` plus its four YAML documents."""
+
+    documents: CvDocumentsPayload
+
+
+class CvCreateRequest(pydantic.BaseModel):
+    """Request body for `POST /api/cvs`."""
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    name: str | None = pydantic.Field(
+        default=None,
+        description="Display name for the new CV; defaults to `Untitled CV`.",
+    )
+
+
+class CvUpdateRequest(pydantic.BaseModel):
+    """Request body for `PUT /api/cvs/{id}` (the autosave write).
+
+    Why:
+        `seen_updated_at` is the optimistic-concurrency token the client
+        last read (see `repository.update_cv_conditional`); the write only
+        applies if the stored `updated_at` still matches it.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    name: str
+    documents: CvDocumentsPayload
+    seen_updated_at: datetime
+
+
+class CvUpdateResponse(pydantic.BaseModel):
+    """Response body for a successful `PUT /api/cvs/{id}` or version restore."""
+
+    updated_at: datetime
+
+
+class CvConflictCurrent(pydantic.BaseModel):
+    """The server's current state, returned on a `409` autosave conflict."""
+
+    updated_at: datetime
+    documents: CvDocumentsPayload
+
+
+class CvConflictResponse(pydantic.BaseModel):
+    """Response body for a `409` autosave conflict.
+
+    Why:
+        Lets the client reconcile: it can diff `current` against its own
+        pending edit and decide whether to overwrite, merge, or discard.
+    """
+
+    current: CvConflictCurrent
+
+
+class CvVersionSummary(pydantic.BaseModel):
+    """One row of `GET /api/cvs/{id}/versions`."""
+
+    id: int
+    created_at: datetime
+
+
+class PreferenceUpdateRequest(pydantic.BaseModel):
+    """Request body for `PUT /api/preferences`."""
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    key: str
+    value: str

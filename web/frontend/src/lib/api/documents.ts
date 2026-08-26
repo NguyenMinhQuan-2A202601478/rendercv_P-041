@@ -1,4 +1,5 @@
 import { parseValidationErrors, type ValidationError } from '$lib/api/validate';
+import { apiFetch } from '$lib/api/http';
 import type { PatchOp } from '$lib/form/patchOps';
 
 /**
@@ -30,7 +31,7 @@ export type PatchResult =
 /** Posts a single YAML document (the `cv` document, self-contained with its `cv:` top key) to `/api/documents/parse`. */
 export async function parseCvDocument(
 	yaml: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = apiFetch
 ): Promise<ParseResult> {
 	const response = await fetchImpl('/api/documents/parse', {
 		method: 'POST',
@@ -66,7 +67,7 @@ export async function parseCvDocument(
 export async function patchCvDocument(
 	yaml: string,
 	ops: PatchOp[],
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = apiFetch
 ): Promise<PatchResult> {
 	const response = await fetchImpl('/api/documents/patch', {
 		method: 'POST',

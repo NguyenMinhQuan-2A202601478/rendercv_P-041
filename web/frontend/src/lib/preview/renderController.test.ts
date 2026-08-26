@@ -160,4 +160,51 @@ describe('createRenderController', () => {
 		expect(render).toHaveBeenCalledWith(docs('cv:\n  name: Now\n'));
 		controller.destroy();
 	});
+
+	it('startPaused: does not react to the source (or fire a render) until activate() is called', async () => {
+		const source = writable<CvDocuments>(docs());
+		const render = vi.fn(async (): Promise<RenderResult> => ({ ok: true, blob: new Blob(['pdf']) }));
+		const controller = createRenderController(source, {
+			debounceMs: 800,
+			render,
+			createObjectURL: () => 'blob:paused',
+			revokeObjectURL: () => {},
+			startPaused: true
+		});
+
+		// A store change before activation (e.g. a bootstrap placeholder) must
+		// not schedule a render, however long we wait.
+		source.set(docs('cv:\n  name: Placeholder\n'));
+		vi.advanceTimersByTime(5000);
+		expect(render).not.toHaveBeenCalled();
+		expect(get(controller.state).url).toBeNull();
+
+		controller.activate();
+		vi.advanceTimersByTime(800);
+		await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
+		expect(render).toHaveBeenCalledWith(docs('cv:\n  name: Placeholder\n'));
+
+		controller.destroy();
+	});
+
+	it('startPaused: activate() is idempotent (a second call does not double-subscribe)', async () => {
+		const source = writable<CvDocuments>(docs());
+		const render = vi.fn(async (): Promise<RenderResult> => ({ ok: true, blob: new Blob(['pdf']) }));
+		const controller = createRenderController(source, {
+			debounceMs: 800,
+			render,
+			createObjectURL: () => 'blob:once',
+			revokeObjectURL: () => {},
+			startPaused: true
+		});
+
+		controller.activate();
+		controller.activate();
+
+		source.set(docs('cv:\n  name: Once\n'));
+		vi.advanceTimersByTime(800);
+		await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
+
+		controller.destroy();
+	});
 });

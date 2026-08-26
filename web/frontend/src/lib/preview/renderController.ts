@@ -24,12 +24,28 @@ export interface RenderControllerOptions {
 	revokeObjectURL?: (url: string) => void;
 	setTimeoutFn?: typeof setTimeout;
 	clearTimeoutFn?: typeof clearTimeout;
+	/**
+	 * If true, the controller does not subscribe to `source` (and so cannot
+	 * fire a render) until `activate()` is called.
+	 *
+	 * Why: a caller that seeds `source` asynchronously (e.g. an app bootstrap
+	 * that replaces a placeholder document with a freshly loaded one) would
+	 * otherwise have this controller react to the placeholder the instant
+	 * it's created, firing a real network render for content nobody will
+	 * ever see -- and, worse, letting that stale render's blob URL satisfy
+	 * an "a preview is showing" check before the real content has rendered
+	 * at all. Defaults to `false` (subscribes immediately, matching every
+	 * caller before this option existed).
+	 */
+	startPaused?: boolean;
 }
 
 export interface RenderController {
 	state: Writable<PreviewState>;
 	/** Renders immediately, bypassing the debounce (used by an explicit "Render" button). */
 	renderNow: (docs: CvDocuments) => void;
+	/** Starts reacting to `source` (scheduling a render for its current value). No-op if already active; only relevant when created with `startPaused: true`. */
+	activate: () => void;
 	/** Stops listening to the document source and revokes any outstanding blob URL. */
 	destroy: () => void;
 }
@@ -57,7 +73,8 @@ export function createRenderController(
 		createObjectURL = (blob: Blob) => URL.createObjectURL(blob),
 		revokeObjectURL = (url: string) => URL.revokeObjectURL(url),
 		setTimeoutFn = setTimeout,
-		clearTimeoutFn = clearTimeout
+		clearTimeoutFn = clearTimeout,
+		startPaused = false
 	} = options;
 
 	const state = writable<PreviewState>(initialState());
@@ -97,9 +114,16 @@ export function createRenderController(
 		}, debounceMs);
 	}
 
-	const unsubscribe = source.subscribe((docs) => {
-		scheduleRender(docs);
-	});
+	let unsubscribe: (() => void) | null = null;
+
+	function activate(): void {
+		if (unsubscribe) return; // already active
+		unsubscribe = source.subscribe((docs) => {
+			scheduleRender(docs);
+		});
+	}
+
+	if (!startPaused) activate();
 
 	function renderNow(docs: CvDocuments): void {
 		if (timer) {
@@ -111,9 +135,9 @@ export function createRenderController(
 
 	function destroy(): void {
 		if (timer) clearTimeoutFn(timer);
-		unsubscribe();
+		unsubscribe?.();
 		if (currentUrl) revokeObjectURL(currentUrl);
 	}
 
-	return { state, renderNow, destroy };
+	return { state, renderNow, activate, destroy };
 }

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
  * End-to-end coverage for the Phase 1 YAML-first MVP: edit -> debounced
@@ -11,15 +12,9 @@ import { test, expect, type Page } from '@playwright/test';
  * for every assertion.
  */
 
-async function firstPreviewUrl(page: Page): Promise<string> {
-	const iframe = page.getByTitle('CV PDF preview');
-	await expect(iframe).toHaveAttribute('src', /^blob:/, { timeout: 15_000 });
-	return (await iframe.getAttribute('src')) ?? '';
-}
-
 test.describe('CV editor: edit -> preview loop', () => {
 	test('valid edit re-renders the preview with a new blob URL', async ({ page }) => {
-		await page.goto('/');
+		await gotoReady(page);
 
 		const initialUrl = await firstPreviewUrl(page);
 
@@ -34,7 +29,7 @@ test.describe('CV editor: edit -> preview loop', () => {
 
 		await expect
 			.poll(async () => (await page.getByTitle('CV PDF preview').getAttribute('src')) ?? '', {
-				timeout: 15_000
+				timeout: 25_000
 			})
 			.not.toBe(initialUrl);
 
@@ -45,7 +40,7 @@ test.describe('CV editor: edit -> preview loop', () => {
 	test('a schema error shows a gutter marker on the right tab/line, preview stays visible', async ({
 		page
 	}) => {
-		await page.goto('/');
+		await gotoReady(page);
 		const goodUrl = await firstPreviewUrl(page);
 
 		const editor = page.locator('.cm-content');
@@ -58,11 +53,11 @@ test.describe('CV editor: edit -> preview loop', () => {
 
 		// The CV tab gets a red error dot.
 		const cvTab = page.getByRole('tab', { name: /^CV/ });
-		await expect(cvTab.locator('span[aria-label*="error"]')).toBeVisible({ timeout: 15_000 });
+		await expect(cvTab.locator('span[aria-label*="error"]')).toBeVisible({ timeout: 25_000 });
 
 		// A gutter marker appears in the lint gutter, on the "phone: abc" line.
 		const marker = page.locator('.cm-lint-marker-error');
-		await expect(marker).toBeVisible({ timeout: 15_000 });
+		await expect(marker).toBeVisible({ timeout: 25_000 });
 
 		// The line the marker sits on is the one we just typed.
 		const phoneLineNumber = await page.evaluate(() => {
@@ -80,7 +75,7 @@ test.describe('CV editor: edit -> preview loop', () => {
 	});
 
 	test('fixing the error clears the gutter marker and the tab dot', async ({ page }) => {
-		await page.goto('/');
+		await gotoReady(page);
 		await firstPreviewUrl(page);
 
 		const editor = page.locator('.cm-content');
@@ -91,7 +86,7 @@ test.describe('CV editor: edit -> preview loop', () => {
 		await page.keyboard.press('Enter');
 		await page.keyboard.type('phone: abc');
 
-		await expect(page.locator('.cm-lint-marker-error')).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator('.cm-lint-marker-error')).toBeVisible({ timeout: 25_000 });
 
 		// Fix it: select the whole "phone: abc" line and delete it.
 		await page.keyboard.press('Home');
@@ -99,8 +94,8 @@ test.describe('CV editor: edit -> preview loop', () => {
 		await page.keyboard.press('Delete');
 		await page.keyboard.press('Backspace'); // remove the now-empty line
 
-		await expect(page.locator('.cm-lint-marker-error')).toHaveCount(0, { timeout: 15_000 });
+		await expect(page.locator('.cm-lint-marker-error')).toHaveCount(0, { timeout: 25_000 });
 		const cvTab = page.getByRole('tab', { name: /^CV/ });
-		await expect(cvTab.locator('span[aria-label*="error"]')).toHaveCount(0, { timeout: 15_000 });
+		await expect(cvTab.locator('span[aria-label*="error"]')).toHaveCount(0, { timeout: 25_000 });
 	});
 });

@@ -134,7 +134,7 @@ class TestPatchFidelity:
         assert len(before_lines) == len(after_lines)
         differing = [
             (i, b, a)
-            for i, (b, a) in enumerate(zip(before_lines, after_lines))
+            for i, (b, a) in enumerate(zip(before_lines, after_lines, strict=True))
             if b != a
         ]
         assert differing == [
@@ -175,9 +175,7 @@ class TestPatchOps:
             "/api/documents/patch",
             json={
                 "yaml": GENERIC_YAML,
-                "ops": [
-                    {"op": "set", "path": ["cv", "location"], "value": "Remote"}
-                ],
+                "ops": [{"op": "set", "path": ["cv", "location"], "value": "Remote"}],
             },
         )
 
@@ -234,7 +232,12 @@ class TestPatchOps:
             "/api/documents/patch",
             json={
                 "yaml": GENERIC_YAML,
-                "ops": [{"op": "delete", "path": ["cv", "sections", "experience", 0, "company"]}],
+                "ops": [
+                    {
+                        "op": "delete",
+                        "path": ["cv", "sections", "experience", 0, "company"],
+                    }
+                ],
             },
         )
 

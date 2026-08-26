@@ -62,7 +62,7 @@ describe('validateDocuments', () => {
 		}
 	});
 
-	it('falls back to a generic main-document error on an unexpected status', async () => {
+	it('shows a friendly generic message (never the raw body) on a plain-text unexpected status', async () => {
 		const fetchMock = vi.fn(async () => new Response('boom', { status: 500 }));
 
 		const result = await validateDocuments(docs, fetchMock as unknown as typeof fetch);
@@ -70,8 +70,36 @@ describe('validateDocuments', () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.errors).toEqual([
-				{ location: null, message: 'boom', yaml_source: 'main_yaml_file', yaml_line: null }
+				{
+					location: null,
+					message: 'Something went wrong — please try again.',
+					yaml_source: 'main_yaml_file',
+					yaml_line: null,
+					kind: 'system',
+					errorId: null
+				}
 			]);
+		}
+	});
+
+	it('surfaces error_id from a structured 500 body without dumping the raw JSON', async () => {
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ error_id: 'abc-123', message: 'Internal error detail' }), {
+					status: 500,
+					headers: { 'content-type': 'application/json' }
+				})
+		);
+
+		const result = await validateDocuments(docs, fetchMock as unknown as typeof fetch);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.errors).toHaveLength(1);
+			expect(result.errors[0].kind).toBe('system');
+			expect(result.errors[0].errorId).toBe('abc-123');
+			expect(result.errors[0].message).toBe('Something went wrong — please try again.');
+			expect(result.errors[0].message).not.toContain('Internal error detail');
 		}
 	});
 });

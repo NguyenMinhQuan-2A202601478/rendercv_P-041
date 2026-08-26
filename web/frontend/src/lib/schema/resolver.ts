@@ -99,6 +99,27 @@ function firstExample(node: JsonSchemaNode): string | undefined {
 	return undefined;
 }
 
+const MAX_DATE_EXAMPLES = 3;
+
+/**
+ * Builds a multi-format placeholder for a `date`/`start_date`/`end_date`
+ * field, e.g. "2020-09-24, 2020-09, 2020, etc." Why not just
+ * {@link firstExample}: a date field accepts several distinct spellings
+ * (`ExactDate`'s YYYY[-MM[-DD]] forms, `ArbitraryDate`'s free text like "Fall
+ * 2023", `end_date`'s literal "present") and the schema's own `examples`
+ * list enumerates them -- showing only the first flattens that into a single
+ * format, which is exactly the placeholder regression this fixes.
+ */
+function dateExamples(node: JsonSchemaNode, resolved: JsonSchemaNode): string | undefined {
+	const examples = (node.examples ?? resolved.examples ?? [])
+		.filter((e) => typeof e === 'string' || typeof e === 'number')
+		.map((e) => String(e));
+	if (examples.length === 0) return undefined;
+
+	const shown = examples.slice(0, MAX_DATE_EXAMPLES);
+	return examples.length > shown.length ? `${shown.join(', ')}, etc.` : shown.join(', ');
+}
+
 /**
  * Resolves one property's schema node into a {@link FieldDescriptor}.
  *
@@ -121,7 +142,10 @@ export function resolveField(
 		key,
 		label: node.title ?? resolved.title ?? titleize(key),
 		description: node.description ?? resolved.description ?? undefined,
-		placeholder: firstExample(node) ?? firstExample(resolved),
+		placeholder:
+			kind === 'date'
+				? (dateExamples(node, resolved) ?? firstExample(node) ?? firstExample(resolved))
+				: (firstExample(node) ?? firstExample(resolved)),
 		required: requiredKeys.includes(key),
 		nullable,
 		kind,

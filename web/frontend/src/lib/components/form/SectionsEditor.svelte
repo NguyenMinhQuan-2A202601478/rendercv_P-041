@@ -1,8 +1,14 @@
 <script lang="ts">
 	import type { JsonSchemaDocument } from '$lib/schema/types';
-	import { getEntryTypeDescriptors, inferEntryType, type EntryTypeName } from '$lib/schema/cvSchema';
+	import {
+		entrySummaryText,
+		getEntryTypeDescriptors,
+		inferEntryType,
+		type EntryTypeName
+	} from '$lib/schema/cvSchema';
 	import type { ValidationError } from '$lib/api/validate';
 	import type { PatchOp } from '$lib/form/patchOps';
+	import { addEntryLabel, displaySectionTitle } from '$lib/form/sectionDisplay';
 	import {
 		buildAddEntryOp,
 		buildAddSectionOp,
@@ -41,6 +47,11 @@
 	let newSectionTitle = $state('');
 	/** Draft rename text per section row (keyed by row index, not title, so an in-progress rename doesn't remount the row). */
 	let titleDrafts = $state<Record<number, string>>({});
+	/** Which section row (by index) is currently showing its title as an editable input instead of a heading. */
+	let editingTitleIndex = $state<number | null>(null);
+	/** Collapsed state per entry, keyed by `"<section title>::<entry index>"` -- purely a view concern, not part of the document. */
+	let collapsedEntries = $state<Record<string, boolean>>({});
+	let dragEntry = $state<{ title: string; index: number } | null>(null);
 
 	function draftFor(index: number, title: string): string {
 		return titleDrafts[index] ?? title;
@@ -50,16 +61,23 @@
 		titleDrafts = { ...titleDrafts, [index]: next };
 	}
 
+	function startEditingTitle(index: number, title: string): void {
+		titleDrafts = { ...titleDrafts, [index]: title };
+		editingTitleIndex = index;
+	}
+
 	function commitTitle(index: number, fromTitle: string): void {
 		const draft = titleDrafts[index];
-		if (draft === undefined) return;
-		const trimmed = draft.trim();
-		if (trimmed && trimmed !== fromTitle && !sectionTitles.includes(trimmed)) {
-			submitOp(buildRenameSectionOp(sections, fromTitle, trimmed));
+		if (draft !== undefined) {
+			const trimmed = draft.trim();
+			if (trimmed && trimmed !== fromTitle && !sectionTitles.includes(trimmed)) {
+				submitOp(buildRenameSectionOp(sections, fromTitle, trimmed));
+			}
 		}
 		const rest = { ...titleDrafts };
 		delete rest[index];
 		titleDrafts = rest;
+		editingTitleIndex = null;
 	}
 
 	function addSection(): void {
@@ -93,8 +111,29 @@
 		submitOp(buildMoveEntryOp(title, from, to));
 	}
 
-	const iconButtonClass =
-		'grid h-6 w-6 place-items-center rounded text-neutral-500 hover:bg-neutral-100 disabled:opacity-30 dark:text-neutral-400 dark:hover:bg-neutral-800';
+	function entryKey(title: string, index: number): string {
+		return `${title}::${index}`;
+	}
+
+	function isCollapsed(title: string, index: number): boolean {
+		return collapsedEntries[entryKey(title, index)] ?? false;
+	}
+
+	function toggleCollapsed(title: string, index: number): void {
+		const key = entryKey(title, index);
+		collapsedEntries = { ...collapsedEntries, [key]: !isCollapsed(title, index) };
+	}
+
+	function onDragHandleKeydown(e: KeyboardEvent, title: string, index: number): void {
+		if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			moveEntry(title, index, index - 1);
+		} else if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			moveEntry(title, index, index + 1);
+		}
+	}
+
 	const inputClass =
 		'w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100';
 </script>
@@ -103,89 +142,112 @@
 	{#each sectionTitles as title, si (si)}
 		{@const entries = sections[title] ?? []}
 		{@const type = sectionType(title)}
-		<section
-			class="rounded-md border border-neutral-200 p-3 dark:border-neutral-700"
-			aria-label={`Section: ${title}`}
-		>
-			<div class="mb-2 flex items-center gap-2">
-				<label class="sr-only" for={`section-title-${si}`}>Section title</label>
-				<input
-					id={`section-title-${si}`}
-					class={`${inputClass} flex-1 font-medium`}
-					value={draftFor(si, title)}
-					oninput={(e) => onTitleInput(si, (e.currentTarget as HTMLInputElement).value)}
-					onblur={() => commitTitle(si, title)}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-					}}
-				/>
+		<section class="flex flex-col gap-2" aria-label={`Section: ${title}`}>
+			<div class="group/heading flex items-center gap-2 border-b-2 border-neutral-200 pb-1.5 dark:border-neutral-700">
+				{#if editingTitleIndex === si}
+					<label class="sr-only" for={`section-title-${si}`}>Section title</label>
+					<!-- svelte-ignore a11y_autofocus -- deliberate: this input only exists while the user is actively editing this section's title (click-to-edit), so moving focus into it here is expected, not a surprise page-load autofocus. -->
+					<input
+						id={`section-title-${si}`}
+						class={`${inputClass} flex-1 text-lg font-bold`}
+						value={draftFor(si, title)}
+						autofocus
+						oninput={(e) => onTitleInput(si, (e.currentTarget as HTMLInputElement).value)}
+						onblur={() => commitTitle(si, title)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+							if (e.key === 'Escape') {
+								const rest = { ...titleDrafts };
+								delete rest[si];
+								titleDrafts = rest;
+								editingTitleIndex = null;
+							}
+						}}
+					/>
+				{:else}
+					<h2 class="min-w-0 flex-1 truncate text-lg font-bold">
+						<button
+							type="button"
+							class="w-full truncate text-left text-neutral-900 hover:text-purple-600 dark:text-neutral-100 dark:hover:text-purple-400"
+							aria-label={`Edit section title: ${displaySectionTitle(title)}`}
+							onclick={() => startEditingTitle(si, title)}
+						>
+							{displaySectionTitle(title)}
+						</button>
+					</h2>
+				{/if}
 				<button
 					type="button"
-					class="rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					class="shrink-0 rounded px-1.5 py-1 text-neutral-400 opacity-0 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:opacity-100 group-hover/heading:opacity-100 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+					aria-label={`Delete section ${displaySectionTitle(title)}`}
+					title="Delete section"
 					onclick={() => deleteSection(title)}
 				>
-					Delete section
+					⋯
 				</button>
 			</div>
 
 			{#if entries.length === 0}
 				<EntryTypePicker descriptors={entryTypeDescriptors} onSelect={(t) => addEntry(title, t)} />
 			{:else}
-				<ul class="flex flex-col gap-2">
+				<ul class="flex flex-col gap-1">
 					{#each entries as entry, ei (ei)}
 						{@const entryType = inferEntryType(entry) ?? type ?? 'TextEntry'}
-						<li class="rounded-md border border-neutral-100 p-2 dark:border-neutral-800">
-							<div class="mb-1 flex items-center justify-between">
-								<span class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-									{entryType}
-								</span>
-								<div class="flex gap-0.5" role="group" aria-label={`Entry ${ei + 1} actions`}>
-									<button
-										type="button"
-										class={iconButtonClass}
-										aria-label={`Move entry ${ei + 1} up`}
-										disabled={ei === 0}
-										onclick={() => moveEntry(title, ei, ei - 1)}
-									>
-										↑
-									</button>
-									<button
-										type="button"
-										class={iconButtonClass}
-										aria-label={`Move entry ${ei + 1} down`}
-										disabled={ei === entries.length - 1}
-										onclick={() => moveEntry(title, ei, ei + 1)}
-									>
-										↓
-									</button>
-									<button
-										type="button"
-										class={iconButtonClass}
-										aria-label={`Delete entry ${ei + 1}`}
-										onclick={() => deleteEntry(title, ei)}
-									>
-										✕
-									</button>
-								</div>
+						<li
+							class="group/entry relative flex items-start gap-1 rounded-md py-1 pl-6 pr-7 hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
+							class:opacity-60={dragEntry !== null && dragEntry.title === title && dragEntry.index === ei}
+							ondragover={(e) => e.preventDefault()}
+							ondrop={() => {
+								if (dragEntry && dragEntry.title === title) moveEntry(title, dragEntry.index, ei);
+								dragEntry = null;
+							}}
+						>
+							<button
+								type="button"
+								class="absolute left-0 top-1.5 grid h-6 w-6 cursor-grab place-items-center rounded text-neutral-400 opacity-0 hover:bg-neutral-100 focus-visible:opacity-100 group-hover/entry:opacity-100 active:cursor-grabbing dark:text-neutral-500 dark:hover:bg-neutral-800"
+								aria-label={`Reorder entry ${ei + 1} of ${entries.length} (drag, or press Arrow Up / Arrow Down while focused)`}
+								title="Drag to reorder, or use Arrow Up / Arrow Down"
+								draggable="true"
+								ondragstart={() => (dragEntry = { title, index: ei })}
+								ondragend={() => (dragEntry = null)}
+								onkeydown={(e) => onDragHandleKeydown(e, title, ei)}
+							>
+								<span aria-hidden="true">⋮⋮</span>
+							</button>
+
+							<div class="min-w-0 flex-1">
+								<EntryEditor
+									sectionTitle={title}
+									entryIndex={ei}
+									type={entryType}
+									fields={fieldsFor(entryType)}
+									value={entry}
+									{errors}
+									{submitOp}
+									collapsed={isCollapsed(title, ei)}
+									onToggleCollapse={() => toggleCollapsed(title, ei)}
+									summaryText={entrySummaryText(entryType, entry)}
+								/>
 							</div>
-							<EntryEditor
-								sectionTitle={title}
-								entryIndex={ei}
-								type={entryType}
-								fields={fieldsFor(entryType)}
-								value={entry}
-								{errors}
-								{submitOp}
-							/>
+
+							<button
+								type="button"
+								class="absolute right-0 top-1.5 grid h-6 w-6 place-items-center rounded text-neutral-400 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/entry:opacity-100 dark:text-neutral-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+								aria-label={`Remove entry ${ei + 1}`}
+								title="Remove entry"
+								onclick={() => deleteEntry(title, ei)}
+							>
+								<span aria-hidden="true">✕</span>
+							</button>
 						</li>
 					{/each}
 				</ul>
 				<button
 					type="button"
-					class="mt-2 text-sm font-medium text-purple-600 hover:underline dark:text-purple-400"
+					class="mt-1 w-full rounded-md border border-dashed border-neutral-300 py-1.5 text-sm font-medium text-neutral-500 hover:border-purple-400 hover:text-purple-600 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-purple-500 dark:hover:text-purple-400"
 					onclick={() => addEntry(title, type ?? 'TextEntry')}
 				>
-					+ Add entry
+					+ Add {addEntryLabel(title)} entry
 				</button>
 			{/if}
 		</section>

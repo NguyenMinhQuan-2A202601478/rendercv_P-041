@@ -92,6 +92,37 @@ export function inferEntryType(entry: unknown): EntryTypeName | null {
 	return null;
 }
 
+/** The field whose value best identifies an entry at a glance, per entry type -- used for the collapsed one-line summary. `null` means the type has no single obvious identifying field (falls back to the entry-type label). */
+const ENTRY_SUMMARY_KEY: Partial<Record<EntryTypeName, string>> = {
+	EducationEntry: 'institution',
+	ExperienceEntry: 'company',
+	NormalEntry: 'name',
+	PublicationEntry: 'title',
+	OneLineEntry: 'label',
+	BulletEntry: 'bullet',
+	NumberedEntry: 'number',
+	ReversedNumberedEntry: 'reversed_number'
+};
+
+/**
+ * The one-line summary shown for a collapsed `cv.sections` entry (reference
+ * UX: institution/company/name/label value). `TextEntry` is the bare string
+ * itself; every other type reads its identifying field (see
+ * {@link ENTRY_SUMMARY_KEY}) and falls back to a placeholder when that field
+ * is still empty, so a freshly-added entry never collapses to blank text.
+ */
+export function entrySummaryText(type: EntryTypeName, entry: unknown): string {
+	if (type === 'TextEntry') {
+		const text = typeof entry === 'string' ? entry.trim() : '';
+		return text || 'Empty entry';
+	}
+
+	const key = ENTRY_SUMMARY_KEY[type];
+	const value = key && entry && typeof entry === 'object' ? (entry as Record<string, unknown>)[key] : undefined;
+	const text = typeof value === 'string' ? value.trim() : '';
+	return text || 'Untitled entry';
+}
+
 /**
  * Builds a fresh entry value of the given type, using only its schema's
  * required fields defaulted to an empty value of the right kind.

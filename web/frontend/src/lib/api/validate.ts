@@ -10,6 +10,16 @@ export interface ValidationError {
 	message: string;
 	yaml_source: YamlSource;
 	yaml_line: number | null;
+	/**
+	 * `'field'` (the default, omitted) is a normal 422 validation error tied
+	 * to a document/line. `'system'` is a non-422 failure (a 500, a network
+	 * error, an unexpected status) that carries no useful location -- the UI
+	 * shows a friendly generic line for these instead of the raw response
+	 * body (see {@link genericSystemError}).
+	 */
+	kind?: 'field' | 'system';
+	/** Only set for `kind: 'system'`, when the backend's error body included one (`{error_id, message}`) -- shown in small muted text so a user can reference it in a bug report without seeing the raw payload. */
+	errorId?: string | null;
 }
 
 export type ValidateResult = { ok: true } | { ok: false; errors: ValidationError[] };
@@ -40,6 +50,36 @@ export function parseValidationErrors(body: unknown): ValidationError[] {
 			yaml_line: typeof entry.yaml_line === 'number' ? entry.yaml_line : null
 		};
 	});
+}
+
+/**
+ * Builds the one `ValidationError` shown for a non-422 failure response
+ * (a 500 `{error_id, message}` JSON body, a plain-text body, or anything
+ * else this app didn't ask for). Always a friendly, fixed message -- never
+ * the raw response body -- with the backend's `error_id` carried through
+ * when the body happened to be JSON shaped like one, so the UI can show it
+ * in small muted text instead of dumping JSON at the user.
+ */
+export async function genericSystemError(response: Response): Promise<ValidationError> {
+	const text = await response.text().catch(() => '');
+	let errorId: string | null = null;
+	try {
+		const parsed: unknown = JSON.parse(text);
+		if (parsed && typeof parsed === 'object' && typeof (parsed as { error_id?: unknown }).error_id === 'string') {
+			errorId = (parsed as { error_id: string }).error_id;
+		}
+	} catch {
+		// Not JSON (or not the expected shape) -- plain text, no error_id to surface.
+	}
+
+	return {
+		location: null,
+		message: 'Something went wrong — please try again.',
+		yaml_source: 'main_yaml_file',
+		yaml_line: null,
+		kind: 'system',
+		errorId
+	};
 }
 
 /**
@@ -76,16 +116,5 @@ export async function validateDocuments(
 		return { ok: false, errors: parseValidationErrors(body) };
 	}
 
-	const text = await response.text().catch(() => '');
-	return {
-		ok: false,
-		errors: [
-			{
-				location: null,
-				message: text || `Validation failed with status ${response.status}`,
-				yaml_source: 'main_yaml_file',
-				yaml_line: null
-			}
-		]
-	};
+	return { ok: false, errors: [await genericSystemError(response)] };
 }

@@ -13,6 +13,8 @@ repos:
         args:
           - --skip=src/rendercv/schema/models/locale/other_locales/*,web/frontend/package-lock.json
           - --exclude-file=schema.json
+          # "thay" is a valid Vietnamese word used in the web editor's UI copy.
+          - --ignore-words-list=thay
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.7
     hooks:

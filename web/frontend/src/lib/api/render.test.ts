@@ -67,14 +67,34 @@ describe('renderPreview', () => {
 		}
 	});
 
-	it('falls back to a generic error on an unexpected status', async () => {
+	it('shows a friendly generic message (never the raw body) on an unexpected status', async () => {
 		const fetchMock = vi.fn(async () => new Response('boom', { status: 500 }));
 
 		const result = await renderPreview(docs, fetchMock as unknown as typeof fetch);
 
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
-			expect(result.errors[0].message).toBe('boom');
+			expect(result.errors[0].message).toBe('Something went wrong — please try again.');
+			expect(result.errors[0].message).not.toContain('boom');
+			expect(result.errors[0].kind).toBe('system');
+		}
+	});
+
+	it('surfaces error_id from a structured 500 body without dumping the raw JSON', async () => {
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ error_id: 'render-500-xyz', message: 'Typst compile failed' }), {
+					status: 500,
+					headers: { 'content-type': 'application/json' }
+				})
+		);
+
+		const result = await renderPreview(docs, fetchMock as unknown as typeof fetch);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.errors[0].errorId).toBe('render-500-xyz');
+			expect(result.errors[0].message).not.toContain('Typst compile failed');
 		}
 	});
 });

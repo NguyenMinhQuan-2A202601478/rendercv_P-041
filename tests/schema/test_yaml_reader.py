@@ -1,3 +1,4 @@
+import concurrent.futures
 import pathlib
 
 import pytest
@@ -42,3 +43,26 @@ class TestReadYaml:
 
         assert isinstance(result, CommentedMap)
         assert result["key"] == "*not_an_alias"
+
+    def test_concurrent_parsing_is_thread_safe(self):
+        # Why: a shared module-level ruamel YAML instance corrupts its
+        # internal parser state under concurrent use (observed as
+        # AttributeError/ParserError 500s in the web API's threadpool);
+        # read_yaml must build a parser per call so parallel callers are
+        # safe. Regression for the shared-instance bug.
+        sections = "\n".join(
+            f"    section_{i}:\n      - entry one {i}\n      - entry two {i}"
+            for i in range(40)
+        )
+        yaml_content = "cv:\n  name: John Doe\n  sections:\n" + sections + "\n"
+
+        def parse_repeatedly(worker_index: int) -> int:
+            for _ in range(25):
+                result = read_yaml(yaml_content)
+                assert result["cv"]["name"] == "John Doe"
+            return worker_index
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(parse_repeatedly, range(8)))
+
+        assert results == list(range(8))

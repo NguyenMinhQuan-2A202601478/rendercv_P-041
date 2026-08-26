@@ -30,7 +30,17 @@
 		lastErrorCount = count;
 	});
 
-	let errorsByTab = $derived(groupErrorsByDocument(errors));
+	/**
+	 * System-kind errors (a 500, a network failure, anything that isn't the
+	 * structured 422 shape -- see `genericSystemError`) get a single friendly
+	 * banner line instead of being grouped by document/tab: they carry no
+	 * useful yaml_source/line, so treating them like a field error would
+	 * either mislabel them under "CV" or (worse) show their raw message.
+	 */
+	let systemErrors = $derived(errors.filter((e) => e.kind === 'system'));
+	let fieldErrors = $derived(errors.filter((e) => e.kind !== 'system'));
+
+	let errorsByTab = $derived(groupErrorsByDocument(fieldErrors));
 	let tabsWithErrors = $derived(DOCUMENT_KEYS.filter((key) => errorsByTab[key].length > 0));
 
 	function categoryIcon(error: ValidationError): string {
@@ -54,6 +64,14 @@
 			role="alert"
 		>
 			<div class="space-y-2">
+				{#if systemErrors.length > 0}
+					<div>
+						<p class="font-medium">Something went wrong — please try again.</p>
+						{#if systemErrors[0].errorId}
+							<p class="text-xs text-red-400 dark:text-red-500">Error ID: {systemErrors[0].errorId}</p>
+						{/if}
+					</div>
+				{/if}
 				{#each tabsWithErrors as tabKey (tabKey)}
 					<div>
 						<div class="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">

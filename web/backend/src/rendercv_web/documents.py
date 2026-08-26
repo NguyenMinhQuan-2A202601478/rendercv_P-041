@@ -56,9 +56,11 @@ def build_document_yaml() -> ruamel.yaml.YAML:
         content looks native rather than reformatting the whole file.
 
     Returns:
-        A configured `ruamel.yaml.YAML` instance, safe to reuse across
-        requests (only used from request-scoped code, single-threaded per
-        call).
+        A configured `ruamel.yaml.YAML` instance. Build one per operation:
+        ruamel keeps mutable parser state on the instance, so sharing one
+        across the threadpool that serves concurrent requests corrupts
+        parses (the same thread-safety bug fixed in the core's
+        `yaml_reader.build_yaml_parser`).
     """
     document_yaml = ruamel.yaml.YAML()
     document_yaml.Scanner = ScannerNoAlias
@@ -71,9 +73,6 @@ def build_document_yaml() -> ruamel.yaml.YAML:
         lambda loader, node: loader.construct_scalar(node)
     )
     return document_yaml
-
-
-document_yaml = build_document_yaml()
 
 
 @dataclass
@@ -110,7 +109,7 @@ def load_yaml_document(yaml_text: str) -> CommentedMap:
             empty.
     """
     try:
-        result = document_yaml.load(yaml_text)
+        result = build_document_yaml().load(yaml_text)
     except ruamel.yaml.YAMLError as e:
         parser_message = str(e).splitlines()[0].strip()
         if not parser_message.endswith("."):
@@ -422,5 +421,5 @@ def apply_patch_ops(yaml_text: str, ops: list[PatchOp]) -> str:
             apply_move(document, op, op_index)
 
     stream = io.StringIO()
-    document_yaml.dump(document, stream)
+    build_document_yaml().dump(document, stream)
     return stream.getvalue()

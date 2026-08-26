@@ -1,5 +1,5 @@
 import type { CvDocuments } from '$lib/stores/documents';
-import { parseValidationErrors, type ValidationError } from '$lib/api/validate';
+import { genericSystemError, parseValidationErrors, type ValidationError } from '$lib/api/validate';
 import { apiFetch } from '$lib/api/http';
 
 export type { ValidationError } from '$lib/api/validate';
@@ -40,18 +40,7 @@ export async function renderPreview(
 		return { ok: false, errors: parseValidationErrors(body) };
 	}
 
-	const text = await response.text().catch(() => '');
-	return {
-		ok: false,
-		errors: [
-			{
-				location: null,
-				message: text || `Render failed with status ${response.status}`,
-				yaml_source: 'main_yaml_file',
-				yaml_line: null
-			}
-		]
-	};
+	return { ok: false, errors: [await genericSystemError(response)] };
 }
 
 export { parseValidationErrors } from '$lib/api/validate';

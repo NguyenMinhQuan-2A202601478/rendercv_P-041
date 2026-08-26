@@ -10,6 +10,8 @@ Why:
     api-implementation skill).
 """
 
+import concurrent.futures
+
 import pytest
 from fastapi.testclient import TestClient
 from rendercv_web.app import app
@@ -412,3 +414,52 @@ class TestPatchSizeCap:
         )
 
         assert response.status_code == 413
+
+
+class TestConcurrentParsingThreadSafety:
+    """Regression: shared ruamel instances corrupted under the threadpool.
+
+    Why:
+        /api/validate and /api/documents/parse both parse YAML on FastAPI's
+        worker threads. Before the per-call parser fix (core
+        `yaml_reader.build_yaml_parser` and this package's
+        `build_document_yaml`), concurrent requests intermittently crashed
+        with opaque 500s (AttributeError/ParserError inside ruamel).
+    """
+
+    def test_concurrent_validate_and_parse_requests_stay_200(
+        self, client: TestClient
+    ) -> None:
+        sections = "\n".join(
+            f"    section_{i}:\n      - entry one {i}\n      - entry two {i}"
+            for i in range(30)
+        )
+
+        def hit_api(worker_index: int) -> list[int]:
+            cv_yaml = (
+                f"cv:\n  name: Worker {worker_index}\n  sections:\n" + sections + "\n"
+            )
+            statuses: list[int] = []
+            for _ in range(10):
+                response = client.post(
+                    "/api/validate",
+                    json={
+                        "cv_yaml": cv_yaml,
+                        "design_yaml": "",
+                        "locale_yaml": "",
+                        "settings_yaml": "",
+                    },
+                )
+                statuses.append(response.status_code)
+                response = client.post("/api/documents/parse", json={"yaml": cv_yaml})
+                statuses.append(response.status_code)
+            return statuses
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            all_statuses = [
+                status
+                for statuses in executor.map(hit_api, range(6))
+                for status in statuses
+            ]
+
+        assert all_statuses == [200] * len(all_statuses)

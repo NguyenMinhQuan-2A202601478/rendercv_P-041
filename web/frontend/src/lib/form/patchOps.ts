@@ -20,11 +20,22 @@ function isIndex(segment: PathSegment): segment is number {
 	return typeof segment === 'number';
 }
 
-/** A shallow copy of a container value, or a fresh empty object if the value isn't one yet (supports "set creates the path"). */
-function cloneContainer(value: unknown): Record<string, unknown> | unknown[] {
+/**
+ * A shallow copy of a container value, or a fresh empty container if the
+ * value isn't one yet (supports "set/insert creates the path").
+ *
+ * @param preferArray When `value` doesn't already exist, build `[]` instead
+ * of the usual `{}` fallback. Needed for `insert`/`move`: an entry's
+ * optional array field (e.g. `highlights`, never populated by
+ * `entrySkeleton` since it's not required) genuinely does not exist yet the
+ * first time a user adds an item to it -- without this, the walk would
+ * silently fabricate an empty *object* at that path, and the op below would
+ * then reject it for "not pointing to an array".
+ */
+function cloneContainer(value: unknown, preferArray = false): Record<string, unknown> | unknown[] {
 	if (Array.isArray(value)) return [...value];
 	if (value !== null && typeof value === 'object') return { ...(value as Record<string, unknown>) };
-	return {};
+	return preferArray ? [] : {};
 }
 
 function setChild(parent: Record<string, unknown> | unknown[], key: PathSegment, value: unknown): void {
@@ -50,19 +61,21 @@ function getChild(parent: unknown, key: PathSegment): unknown {
  */
 function cloneSpineTo(
 	root: unknown,
-	path: PathSegment[]
+	path: PathSegment[],
+	/** See `cloneContainer`'s `preferArray` doc comment -- passed through only for the final (target) node, e.g. `insert`/`move`'s array target. */
+	arrayAtEnd = false
 ): { rootClone: unknown; node: Record<string, unknown> | unknown[] } {
 	const rootClone = cloneContainer(root);
 	let originalCursor: unknown = root;
 	let cloneCursor: Record<string, unknown> | unknown[] = rootClone;
 
-	for (const segment of path) {
+	path.forEach((segment, i) => {
 		const originalChild = getChild(originalCursor, segment);
-		const clonedChild = cloneContainer(originalChild);
+		const clonedChild = cloneContainer(originalChild, arrayAtEnd && i === path.length - 1);
 		setChild(cloneCursor, segment, clonedChild);
 		cloneCursor = clonedChild;
 		originalCursor = originalChild;
-	}
+	});
 
 	return { rootClone, node: cloneCursor };
 }
@@ -87,7 +100,7 @@ export function applyOp(tree: unknown, op: PatchOp): unknown {
 			return rootClone;
 		}
 		case 'insert': {
-			const { rootClone, node } = cloneSpineTo(tree, op.path);
+			const { rootClone, node } = cloneSpineTo(tree, op.path, true);
 			if (!Array.isArray(node)) {
 				throw new Error(`insert path "${pathKey(op.path)}" does not point to an array.`);
 			}
@@ -95,7 +108,7 @@ export function applyOp(tree: unknown, op: PatchOp): unknown {
 			return rootClone;
 		}
 		case 'move': {
-			const { rootClone, node } = cloneSpineTo(tree, op.path);
+			const { rootClone, node } = cloneSpineTo(tree, op.path, true);
 			if (!Array.isArray(node)) {
 				throw new Error(`move path "${pathKey(op.path)}" does not point to an array.`);
 			}

@@ -49,6 +49,19 @@ describe('resolveDefFields against the real schema', () => {
 		expect(byKey.highlights.items?.kind).toBe('markdown');
 	});
 
+	it('surfaces a multi-format example placeholder for date/start_date/end_date fields', () => {
+		const fields = resolveDefFields(schema, 'EducationEntry');
+		const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));
+
+		// Each placeholder shows more than just the first schema example, and
+		// (schema depending) is truncated with an "etc." rather than silently
+		// dropping the remaining formats.
+		expect(byKey.date.placeholder).toContain(', ');
+		expect(byKey.date.placeholder).toMatch(/2020-09-24/);
+		expect(byKey.start_date.placeholder).toContain(', ');
+		expect(byKey.end_date.placeholder).toContain(', ');
+	});
+
 	it('resolves PublicationEntry: a required string array (authors) and a url field', () => {
 		const fields = resolveDefFields(schema, 'PublicationEntry');
 		const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));

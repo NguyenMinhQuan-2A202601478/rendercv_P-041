@@ -69,6 +69,25 @@ describe('applyOp: insert', () => {
 		expect(education[2]).toEqual({ institution: 'New Uni', area: 'Physics' });
 	});
 
+	it('inserts the first highlight into an entry that has no `highlights` key yet', () => {
+		// Regression: `entrySkeleton` only seeds an entry's *required* fields,
+		// so a freshly-added entry has no `highlights` key at all (not even
+		// `[]`) until the user adds one -- this must create the array, not
+		// throw "does not point to an array".
+		const tree = {
+			cv: { sections: { Experience: [{ company: 'Acme', position: 'Engineer' }] } }
+		};
+		const next = applyOp(tree, {
+			op: 'insert',
+			path: ['cv', 'sections', 'Experience', 0, 'highlights'],
+			index: 0,
+			value: 'First highlight'
+		});
+		expect(getAtPath(next, ['cv', 'sections', 'Experience', 0, 'highlights'])).toEqual([
+			'First highlight'
+		]);
+	});
+
 	it('inserts a new highlight', () => {
 		const tree = sampleTree();
 		const next = applyOp(tree, {

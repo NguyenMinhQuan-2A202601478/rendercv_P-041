@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	ENTRY_TYPES,
 	entrySkeleton,
+	entrySummaryText,
 	getCvHeaderFields,
 	getEntryTypeDescriptors,
 	inferEntryType
@@ -100,5 +101,26 @@ describe('entrySkeleton', () => {
 			const skeleton = entrySkeleton(type, fields);
 			expect(inferEntryType(skeleton)).toBe(type);
 		}
+	});
+});
+
+describe('entrySummaryText', () => {
+	it('reads the identifying field for each entry type', () => {
+		expect(entrySummaryText('EducationEntry', { institution: 'MIT' })).toBe('MIT');
+		expect(entrySummaryText('ExperienceEntry', { company: 'Acme' })).toBe('Acme');
+		expect(entrySummaryText('NormalEntry', { name: 'Side Project' })).toBe('Side Project');
+		expect(entrySummaryText('PublicationEntry', { title: 'A Paper' })).toBe('A Paper');
+		expect(entrySummaryText('OneLineEntry', { label: 'Languages' })).toBe('Languages');
+	});
+
+	it('uses the bare string value for TextEntry', () => {
+		expect(entrySummaryText('TextEntry', 'A line of text')).toBe('A line of text');
+	});
+
+	it('falls back to a placeholder when the identifying field is empty', () => {
+		expect(entrySummaryText('EducationEntry', { institution: '' })).toBe('Untitled entry');
+		expect(entrySummaryText('EducationEntry', {})).toBe('Untitled entry');
+		expect(entrySummaryText('TextEntry', '')).toBe('Empty entry');
+		expect(entrySummaryText('TextEntry', '   ')).toBe('Empty entry');
 	});
 });

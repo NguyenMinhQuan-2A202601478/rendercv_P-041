@@ -318,6 +318,15 @@
 				{/each}
 			</ul>
 		</nav>
+
+		<div class="border-t border-neutral-200 p-2 dark:border-neutral-800">
+			<a
+				href="/welcome"
+				class="block rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+			>
+				About
+			</a>
+		</div>
 	{/if}
 </aside>
 

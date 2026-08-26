@@ -15,9 +15,12 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# disable_existing_loggers=False keeps the host application's logging
+# intact: the FastAPI lifespan runs this env.py at startup, and the
+# default fileConfig behavior would silently strip uvicorn's handlers,
+# swallowing every access line and error traceback after migration.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Why: migrations must run against the same database the app talks to
 # (RENDERCV_WEB_DATABASE_URL), never a hardcoded URL baked into

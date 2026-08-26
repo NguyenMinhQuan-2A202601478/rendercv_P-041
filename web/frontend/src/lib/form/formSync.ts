@@ -1,5 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import type { CvDocuments } from '$lib/stores/documents';
+import type { CvDocuments, DocumentKey } from '$lib/stores/documents';
 import {
 	parseCvDocument,
 	patchCvDocument,
@@ -22,6 +22,8 @@ export interface FormSyncState {
 }
 
 export interface FormSyncOptions {
+	/** Which of the four documents this controller tracks. Defaults to `'cv'` (the only tab Phase 2 wired up). */
+	documentKey?: DocumentKey;
 	/** Idle time after the last queued op before a patch request is sent. */
 	debounceMs?: number;
 	parse?: (yaml: string) => Promise<ParseResult>;
@@ -66,6 +68,7 @@ export function createFormSync(
 	options: FormSyncOptions = {}
 ): FormSyncController {
 	const {
+		documentKey = 'cv',
 		debounceMs = 300,
 		parse = parseCvDocument,
 		patch = patchCvDocument,
@@ -89,12 +92,22 @@ export function createFormSync(
 	let lastKnownCvYaml: string | null = null;
 
 	function currentCvYaml(): string {
-		return get(documents).cv;
+		return get(documents)[documentKey];
 	}
 
 	async function reparse(): Promise<void> {
 		const yaml = currentCvYaml();
 		state.update((s) => ({ ...s, status: 'loading' }));
+
+		// A blank document (design/locale start this way — see the "minimal
+		// YAML" approved semantics) is a valid empty state, not a parse
+		// error: skip the network round trip and hand back an empty tree.
+		if (yaml.trim() === '') {
+			lastKnownCvYaml = yaml;
+			state.set({ status: 'ready', data: {}, errors: [], toast: null });
+			return;
+		}
+
 		const result: ParseResult = await parse(yaml);
 		lastKnownCvYaml = yaml;
 		if (result.ok) {
@@ -141,12 +154,19 @@ export function createFormSync(
 		inFlight = true;
 
 		const yamlSnapshot = currentCvYaml();
-		const result = await patch(yamlSnapshot, ops);
+		// The patch endpoint's YAML parser treats a genuinely empty document as
+		// an error (there's nothing to round-trip), but a blank document is a
+		// valid starting point here (design/locale start this way -- the
+		// "minimal YAML" approved semantics) and the very first write on one
+		// needs somewhere to land: `{}` is a valid empty mapping the backend
+		// can parse and then populate via the ops, same as any other document.
+		const patchableYaml = yamlSnapshot.trim() === '' ? '{}' : yamlSnapshot;
+		const result = await patch(patchableYaml, ops);
 		inFlight = false;
 
 		if (result.ok) {
 			lastKnownCvYaml = result.yaml;
-			documents.update((docs) => ({ ...docs, cv: result.yaml }));
+			documents.update((docs) => ({ ...docs, [documentKey]: result.yaml }));
 			state.update((s) => ({ ...s, toast: null }));
 		} else {
 			const message =
@@ -172,7 +192,7 @@ export function createFormSync(
 	const unsubscribe = documents.subscribe((docs) => {
 		if (!active) return;
 		if (lastKnownCvYaml === null) return;
-		if (docs.cv === lastKnownCvYaml) return;
+		if (docs[documentKey] === lastKnownCvYaml) return;
 		if (inFlight || pendingOps.length > 0) return;
 		void reparse();
 	});

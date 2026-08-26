@@ -41,6 +41,9 @@ export function unwrapNullable(node: JsonSchemaNode): { inner: JsonSchemaNode; n
 
 const DATE_REFS = new Set(['#/$defs/ExactDate', '#/$defs/ArbitraryDate']);
 
+/** `$ref`s that resolve to a bare `string` type but represent a typst dimension (e.g. `"0.7in"`). */
+const DIMENSION_REFS = new Set(['#/$defs/TypstDimension']);
+
 /** Field-name heuristics for the "this optional-string is really markdown" detection. */
 const MARKDOWN_KEYS = new Set([
 	'summary',
@@ -58,10 +61,13 @@ function kindForLeaf(
 	node: JsonSchemaNode
 ): FieldKind {
 	if (node.$ref && DATE_REFS.has(node.$ref)) return 'date';
+	if (node.$ref && DIMENSION_REFS.has(node.$ref)) return 'dimension';
 	if (node.enum) return 'enum';
 	if (node.format === 'uri') return 'url';
+	if (node.format === 'color') return 'color';
 
 	const resolved = deref(defs, node);
+	if (resolved.format === 'color') return 'color';
 	if (resolved.enum) return 'enum';
 	if (resolved.type === 'boolean') return 'boolean';
 	if (resolved.type === 'integer' || resolved.type === 'number') return 'number';
@@ -118,7 +124,8 @@ export function resolveField(
 		placeholder: firstExample(node) ?? firstExample(resolved),
 		required: requiredKeys.includes(key),
 		nullable,
-		kind
+		kind,
+		default: node.default ?? resolved.default
 	};
 
 	if (kind === 'enum') {

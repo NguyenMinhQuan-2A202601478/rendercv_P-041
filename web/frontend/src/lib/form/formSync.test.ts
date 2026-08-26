@@ -246,4 +246,62 @@ describe('formSync', () => {
 		expect(parse).toHaveBeenCalledTimes(1);
 		sync.destroy();
 	});
+
+	describe('documentKey (design/locale/settings forms sharing the same sync engine)', () => {
+		it('tracks the given document instead of "cv"', async () => {
+			const store = writable(docs('cv:\n  name: John\n'));
+			store.update((d) => ({ ...d, design: 'design:\n  theme: classic\n' }));
+			const parse = vi.fn(
+				async (): Promise<ParseResult> => ({ ok: true, data: { design: { theme: 'classic' } } })
+			);
+			const patch = vi.fn(
+				async (): Promise<PatchResult> => ({ ok: true, yaml: 'design:\n  theme: ember\n' })
+			);
+			const sync = createFormSync(store, { documentKey: 'design', parse, patch, debounceMs: 300 });
+
+			await sync.activate();
+			expect(parse).toHaveBeenCalledWith('design:\n  theme: classic\n');
+
+			sync.submitOp({ op: 'set', path: ['design', 'theme'], value: 'ember' });
+			await vi.advanceTimersByTimeAsync(300);
+			expect(patch).toHaveBeenCalledWith('design:\n  theme: classic\n', [
+				{ op: 'set', path: ['design', 'theme'], value: 'ember' }
+			]);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(get(store).design).toBe('design:\n  theme: ember\n');
+			expect(get(store).cv).toBe('cv:\n  name: John\n'); // untouched
+			sync.destroy();
+		});
+
+		it('the first write on a still-blank document patches "{}" instead of the literal blank string (the backend rejects a truly empty document)', async () => {
+			const store = writable(docs('cv:\n  name: John\n')); // design starts blank
+			const parse = vi.fn(async (): Promise<ParseResult> => ({ ok: true, data: {} }));
+			const patch = vi.fn(
+				async (): Promise<PatchResult> => ({ ok: true, yaml: 'design:\n  theme: ember\n' })
+			);
+			const sync = createFormSync(store, { documentKey: 'design', parse, patch, debounceMs: 300 });
+			await sync.activate();
+
+			sync.submitOp({ op: 'set', path: ['design'], value: { theme: 'ember' } });
+			await vi.advanceTimersByTimeAsync(300);
+
+			expect(patch).toHaveBeenCalledWith('{}', [
+				{ op: 'set', path: ['design'], value: { theme: 'ember' } }
+			]);
+			sync.destroy();
+		});
+
+		it('a blank document (never touched) resolves to an empty tree without calling parse', async () => {
+			const store = writable(docs('cv:\n  name: John\n')); // design/locale/settings default to ''
+			const parse = vi.fn(async (): Promise<ParseResult> => ({ ok: true, data: {} }));
+			const sync = createFormSync(store, { documentKey: 'design', parse, patch: vi.fn() });
+
+			await sync.activate();
+
+			expect(parse).not.toHaveBeenCalled();
+			expect(get(sync.state)).toEqual({ status: 'ready', data: {}, errors: [], toast: null });
+			sync.destroy();
+		});
+	});
 });

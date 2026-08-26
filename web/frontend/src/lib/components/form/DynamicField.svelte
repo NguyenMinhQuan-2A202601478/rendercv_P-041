@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { FieldDescriptor } from '$lib/schema/types';
 	import type { ValidationError } from '$lib/api/validate';
+	import type { PathSegment } from '$lib/form/patchOps';
+	import type { OverrideInfo } from '$lib/form/effectiveValue';
 	import FieldRow from './FieldRow.svelte';
 	import ArrayField from './ArrayField.svelte';
 	import ObjectFieldset from './ObjectFieldset.svelte';
@@ -16,24 +18,37 @@
 		descriptor,
 		value,
 		errors = [],
-		onchange
+		onchange,
+		path,
+		overrideInfo
 	}: {
 		descriptor: FieldDescriptor;
 		value: unknown;
 		errors?: ValidationError[];
 		onchange: (value: unknown) => void;
+		/** See `FieldRow`'s doc comment: threaded through unchanged for the effective-value overlay. */
+		path?: PathSegment[];
+		overrideInfo?: OverrideInfo;
 	} = $props();
 </script>
 
 {#if descriptor.kind === 'array'}
-	<ArrayField {descriptor} values={(value as unknown[] | null | undefined) ?? []} {onchange} />
+	<ArrayField
+		{descriptor}
+		values={(value as unknown[] | null | undefined) ?? []}
+		{onchange}
+		{path}
+		{overrideInfo}
+	/>
 {:else if descriptor.kind === 'object'}
 	<ObjectFieldset
 		{descriptor}
 		value={(value as Record<string, unknown> | null | undefined) ?? {}}
 		onFieldChange={(key, fieldValue) =>
 			onchange({ ...((value as Record<string, unknown> | null | undefined) ?? {}), [key]: fieldValue })}
+		{path}
+		{overrideInfo}
 	/>
 {:else}
-	<FieldRow {descriptor} {value} {errors} {onchange} />
+	<FieldRow {descriptor} {value} {errors} {onchange} {path} {overrideInfo} />
 {/if}

@@ -1,38 +1,78 @@
 <script lang="ts">
 	import type { FieldDescriptor } from '$lib/schema/types';
 	import type { ValidationError } from '$lib/api/validate';
+	import type { PathSegment } from '$lib/form/patchOps';
+	import type { OverrideInfo } from '$lib/form/effectiveValue';
+	import SegmentedControl from './SegmentedControl.svelte';
+	import StepperField from './StepperField.svelte';
+	import ColorField from './ColorField.svelte';
+	import DimensionField from './DimensionField.svelte';
+
+	/**
+	 * `SegmentedControl` fits without wrapping for a short enum (the
+	 * reference's A4/US Letter picker); anything longer (font families, the
+	 * 22 locale languages) gets `StepperField`'s cycle-plus-dropdown instead.
+	 */
+	const SEGMENTED_CONTROL_MAX_OPTIONS = 4;
 
 	let {
 		descriptor,
 		value,
 		errors = [],
-		onchange
+		onchange,
+		path,
+		overrideInfo
 	}: {
 		descriptor: FieldDescriptor;
 		value: unknown;
 		errors?: ValidationError[];
 		onchange: (value: unknown) => void;
+		/**
+		 * This field's full path from the document root (e.g.
+		 * `['design', 'page', 'top_margin']`). Only meaningful together with
+		 * `overrideInfo` — the design/locale forms' effective-value overlay
+		 * (approved semantics, phase 3): omitted, this field never shows the
+		 * muted/emphasized distinction or the reset affordance (the CV form's
+		 * fields have no theme-style defaults to overlay).
+		 */
+		path?: PathSegment[];
+		overrideInfo?: OverrideInfo;
 	} = $props();
 
 	const instanceId = Math.random().toString(36).slice(2, 8);
 	let fieldId = $derived(`field-${descriptor.key}-${instanceId}`);
 
+	/** Undefined `overrideInfo`/`path` means "no overlay in play" -- always show the normal (emphasized) style, no reset button. */
+	let isOverridden = $derived(overrideInfo && path ? overrideInfo.isOverridden(path) : true);
+	let showsResetAffordance = $derived(Boolean(overrideInfo && path && isOverridden));
+
+	function reset(): void {
+		if (overrideInfo && path) overrideInfo.onReset(path);
+	}
+
+	/**
+	 * Commits a new value for this field. When `overrideInfo`/`path` are
+	 * given (design/locale forms), this writes a precise per-leaf `set` op
+	 * at this field's own absolute path instead of the normal `onchange`
+	 * bubble — see `OverrideInfo.setPath`'s doc comment.
+	 */
+	function commit(next: unknown): void {
+		if (overrideInfo && path) overrideInfo.setPath(path, next);
+		else onchange(next);
+	}
+
 	function handleTextInput(e: Event): void {
 		const target = e.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-		onchange(target.value);
+		commit(target.value);
 	}
 
 	function handleNumberInput(e: Event): void {
 		const target = e.currentTarget as HTMLInputElement;
-		onchange(target.value === '' ? null : Number(target.value));
+		commit(target.value === '' ? null : Number(target.value));
 	}
 
 	function toggleBoolean(): void {
-		onchange(!value);
-	}
-
-	function selectEnumOption(option: string): void {
-		onchange(option);
+		commit(!value);
 	}
 
 	const inputClass =
@@ -42,15 +82,33 @@
 <div
 	class="flex flex-col gap-1 border-b border-neutral-100 py-2 last:border-b-0 dark:border-neutral-800 sm:flex-row sm:items-start sm:gap-4"
 >
-	<label
-		for={fieldId}
-		class="w-full shrink-0 pt-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 sm:w-40"
-	>
-		{descriptor.label}
-		{#if descriptor.required}
-			<span class="text-red-500" aria-hidden="true"> *</span>
+	<div class="flex w-full shrink-0 items-center gap-1 sm:w-40">
+		<label
+			for={fieldId}
+			class="pt-1.5 text-sm font-medium sm:pt-0"
+			class:text-neutral-700={isOverridden}
+			class:dark:text-neutral-300={isOverridden}
+			class:italic={!isOverridden}
+			class:text-neutral-400={!isOverridden}
+			class:dark:text-neutral-500={!isOverridden}
+		>
+			{descriptor.label}
+			{#if descriptor.required}
+				<span class="text-red-500" aria-hidden="true"> *</span>
+			{/if}
+		</label>
+		{#if showsResetAffordance}
+			<button
+				type="button"
+				class="grid h-5 w-5 shrink-0 place-items-center rounded text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950"
+				aria-label={`Reset ${descriptor.label} to the theme default`}
+				title="Reset to default"
+				onclick={reset}
+			>
+				↺
+			</button>
 		{/if}
-	</label>
+	</div>
 
 	<div class="flex min-w-0 flex-1 flex-col gap-1">
 		{#if descriptor.kind === 'boolean'}
@@ -70,27 +128,31 @@
 					style={`left: ${value ? '1.25rem' : '0.125rem'}`}
 				></span>
 			</button>
+		{:else if descriptor.kind === 'enum' && (descriptor.enumValues?.length ?? 0) <= SEGMENTED_CONTROL_MAX_OPTIONS}
+			<SegmentedControl
+				id={fieldId}
+				options={descriptor.enumValues ?? []}
+				value={typeof value === 'string' ? value : (descriptor.enumValues?.[0] ?? '')}
+				ariaLabel={descriptor.label}
+				onchange={(option) => commit(option)}
+			/>
 		{:else if descriptor.kind === 'enum'}
-			<div id={fieldId} role="radiogroup" aria-label={descriptor.label} class="flex flex-wrap gap-1">
-				{#each descriptor.enumValues ?? [] as option (option)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={value === option}
-						class="rounded-md border px-2 py-1 text-xs font-medium transition-colors"
-						class:border-purple-600={value === option}
-						class:bg-purple-600={value === option}
-						class:text-white={value === option}
-						class:border-neutral-300={value !== option}
-						class:text-neutral-600={value !== option}
-						class:dark:border-neutral-700={value !== option}
-						class:dark:text-neutral-300={value !== option}
-						onclick={() => selectEnumOption(option)}
-					>
-						{option}
-					</button>
-				{/each}
-			</div>
+			<StepperField
+				id={fieldId}
+				options={descriptor.enumValues ?? []}
+				value={typeof value === 'string' ? value : (descriptor.enumValues?.[0] ?? '')}
+				ariaLabel={descriptor.label}
+				onchange={(option) => commit(option)}
+			/>
+		{:else if descriptor.kind === 'color'}
+			<ColorField
+				id={fieldId}
+				value={typeof value === 'string' ? value : ''}
+				placeholder={descriptor.placeholder}
+				onchange={(v) => commit(v)}
+			/>
+		{:else if descriptor.kind === 'dimension'}
+			<DimensionField id={fieldId} value={typeof value === 'string' ? value : ''} onchange={(v) => commit(v)} />
 		{:else if descriptor.kind === 'markdown'}
 			<textarea
 				id={fieldId}

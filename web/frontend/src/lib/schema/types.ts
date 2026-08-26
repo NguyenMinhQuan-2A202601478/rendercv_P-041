@@ -26,6 +26,12 @@ export interface JsonSchemaNode {
 	properties?: Record<string, JsonSchemaNode>;
 	required?: string[];
 	additionalProperties?: JsonSchemaNode | boolean;
+	/**
+	 * Pydantic's discriminated-union marker (e.g. `BuiltInDesign`'s 9 theme
+	 * variants, `Locale`'s 22 language variants): maps the discriminator
+	 * field's value to the `$defs` entry for that variant.
+	 */
+	discriminator?: { propertyName: string; mapping: Record<string, string> };
 }
 
 export interface JsonSchemaDocument {
@@ -47,6 +53,8 @@ export type FieldKind =
 	| 'markdown'
 	| 'date'
 	| 'url'
+	| 'color'
+	| 'dimension'
 	| 'enum'
 	| 'boolean'
 	| 'number'
@@ -66,6 +74,12 @@ export interface FieldDescriptor {
 	/** True if the resolved type admits `null` (an `anyOf` branch with `type: null`). */
 	nullable: boolean;
 	kind: FieldKind;
+	/**
+	 * The schema's own `default` for this field, if it declares one (most
+	 * design/locale leaf fields do). Used for the effective-value overlay:
+	 * a field with no explicit override displays this value.
+	 */
+	default?: unknown;
 	/** Only for `kind: 'enum'`. */
 	enumValues?: string[];
 	/** Only for `kind: 'array'`: the descriptor for one item. */

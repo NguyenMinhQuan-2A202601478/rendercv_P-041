@@ -19,12 +19,24 @@
 	let {
 		descriptor,
 		values,
-		onchange
+		onchange,
+		path,
+		overrideInfo
 	}: {
 		descriptor: FieldDescriptor;
 		values: unknown[];
 		onchange: (values: unknown[]) => void;
+		/** See `FieldRow`'s doc comment: an array field is treated as one leaf for the override overlay (the whole array resets together). */
+		path?: import('$lib/form/patchOps').PathSegment[];
+		overrideInfo?: import('$lib/form/effectiveValue').OverrideInfo;
 	} = $props();
+
+	let isOverridden = $derived(overrideInfo && path ? overrideInfo.isOverridden(path) : true);
+	let showsResetAffordance = $derived(Boolean(overrideInfo && path && isOverridden));
+
+	function reset(): void {
+		if (overrideInfo && path) overrideInfo.onReset(path);
+	}
 
 	let itemDescriptor: FieldDescriptor = $derived(
 		descriptor.items ?? { key: descriptor.key, label: '', required: false, nullable: true, kind: 'string' }
@@ -36,12 +48,18 @@
 		return '';
 	}
 
+	/** Commits a whole new array value -- see `FieldRow`'s `commit` doc comment for why `setPath` bypasses the usual `onchange` bubble. */
+	function commit(next: unknown[]): void {
+		if (overrideInfo && path) overrideInfo.setPath(path, next);
+		else onchange(next);
+	}
+
 	function addItem(): void {
-		onchange([...values, defaultItem()]);
+		commit([...values, defaultItem()]);
 	}
 
 	function deleteItem(index: number): void {
-		onchange(values.filter((_, i) => i !== index));
+		commit(values.filter((_, i) => i !== index));
 	}
 
 	function moveItem(from: number, to: number): void {
@@ -49,13 +67,13 @@
 		const next = [...values];
 		const [moved] = next.splice(from, 1);
 		next.splice(to, 0, moved);
-		onchange(next);
+		commit(next);
 	}
 
 	function itemChange(index: number, itemValue: unknown): void {
 		const next = [...values];
 		next[index] = itemValue;
-		onchange(next);
+		commit(next);
 	}
 
 	let dragIndex = $state<number | null>(null);
@@ -66,7 +84,29 @@
 
 <div class="flex flex-col gap-2 border-b border-neutral-100 py-2 last:border-b-0 dark:border-neutral-800">
 	<div class="flex items-center justify-between">
-		<span class="text-sm font-medium text-neutral-700 dark:text-neutral-300">{descriptor.label}</span>
+		<span class="flex items-center gap-1">
+			<span
+				class="text-sm font-medium"
+				class:text-neutral-700={isOverridden}
+				class:dark:text-neutral-300={isOverridden}
+				class:italic={!isOverridden}
+				class:text-neutral-400={!isOverridden}
+				class:dark:text-neutral-500={!isOverridden}
+			>
+				{descriptor.label}
+			</span>
+			{#if showsResetAffordance}
+				<button
+					type="button"
+					class="grid h-5 w-5 shrink-0 place-items-center rounded text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950"
+					aria-label={`Reset ${descriptor.label} to the theme default`}
+					title="Reset to default"
+					onclick={reset}
+				>
+					↺
+				</button>
+			{/if}
+		</span>
 		<button
 			type="button"
 			class="text-sm font-medium text-purple-600 hover:underline dark:text-purple-400"

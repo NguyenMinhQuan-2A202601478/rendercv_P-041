@@ -1,13 +1,21 @@
 <script lang="ts">
-	import type { Readable } from 'svelte/store';
+	import { onDestroy, onMount } from 'svelte';
+	import { get, type Readable } from 'svelte/store';
 	import { DOCUMENT_KEYS, DOCUMENT_LABELS, type DocumentKey } from '$lib/stores/documents';
 	import type { PreviewState } from '$lib/preview/renderController';
 	import type { ValidationError } from '$lib/api/validate';
 	import { groupErrorsByDocument } from '$lib/editor/errorClassification';
 	import { derivePdfFilename } from '$lib/editor/filename';
 	import { documents } from '$lib/stores/documents';
+	import { fetchThemes } from '$lib/api/themes';
+	import { createFormSync } from '$lib/form/formSync';
+	import { buildDiscriminatorSwitchOp } from '$lib/form/documentActions';
 	import YamlEditor from '$lib/components/YamlEditor.svelte';
 	import CvForm from '$lib/components/form/CvForm.svelte';
+	import DesignForm from '$lib/components/form/DesignForm.svelte';
+	import LocaleForm from '$lib/components/form/LocaleForm.svelte';
+	import SettingsForm from '$lib/components/form/SettingsForm.svelte';
+	import ThemeSwitcher from '$lib/components/form/ThemeSwitcher.svelte';
 
 	let {
 		previewState,
@@ -22,6 +30,41 @@
 	let canRedo = $state(false);
 
 	let errorsByTab = $derived(groupErrorsByDocument(errors));
+
+	// The theme switcher is visible on every tab (reference UX), so its
+	// design-document sync is owned here rather than by `DesignForm` --
+	// otherwise two independent parse/patch controllers for the same
+	// document would race each other the moment both are mounted.
+	const designSync = createFormSync(documents, { documentKey: 'design' });
+	const designSyncState = designSync.state;
+
+	let themeNames = $state<string[]>(['classic']);
+
+	onMount(() => {
+		void designSync.activate();
+		fetchThemes()
+			.then((themes) => {
+				themeNames = themes.map((t) => t.name);
+			})
+			.catch(() => {
+				// The switcher just keeps its single-item fallback list; the
+				// Design form's own load-error message covers the user-visible case.
+			});
+	});
+
+	onDestroy(() => {
+		designSync.deactivate();
+		designSync.destroy();
+	});
+
+	let currentTheme = $derived(
+		(($designSyncState.data?.design as Record<string, unknown> | undefined)?.theme as string | undefined) ??
+			'classic'
+	);
+
+	function switchTheme(theme: string): void {
+		designSync.submitOp(buildDiscriminatorSwitchOp(get(documents).design, 'design', 'theme', theme));
+	}
 
 	// Whenever the error set changes, refresh gutter markers in all four
 	// documents so a tab a user hasn't opened yet is already annotated.
@@ -102,8 +145,11 @@
 			{/each}
 		</div>
 
-		<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-			<span>YAML</span>
+		<div class="flex items-center gap-4">
+			<ThemeSwitcher {themeNames} {currentTheme} onSwitch={switchTheme} />
+
+			<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+				<span>YAML</span>
 			<button
 				type="button"
 				role="switch"
@@ -119,7 +165,8 @@
 					style={`left: ${yamlMode ? '1.25rem' : '0.125rem'}`}
 				></span>
 			</button>
-		</label>
+			</label>
+		</div>
 	</div>
 
 	<div
@@ -240,13 +287,12 @@
 				</div>
 			{:else if activeTab === 'cv'}
 				<CvForm errors={errorsForTab('cv')} />
+			{:else if activeTab === 'design'}
+				<DesignForm syncState={designSyncState} submitOp={designSync.submitOp} errors={errorsForTab('design')} />
+			{:else if activeTab === 'locale'}
+				<LocaleForm errors={errorsForTab('locale')} />
 			{:else}
-				<div
-					class="flex h-full items-center justify-center rounded-md border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700"
-				>
-					The form editor for {DOCUMENT_LABELS[activeTab]} is generated from the schema in a
-					later phase. Switch back to YAML to edit it.
-				</div>
+				<SettingsForm errors={errorsForTab('settings')} />
 			{/if}
 		</div>
 	</div>

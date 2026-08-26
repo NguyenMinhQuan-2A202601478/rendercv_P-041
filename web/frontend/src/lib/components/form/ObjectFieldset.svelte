@@ -1,18 +1,25 @@
 <script lang="ts">
 	import type { FieldDescriptor } from '$lib/schema/types';
 	import type { ValidationError } from '$lib/api/validate';
+	import type { PathSegment } from '$lib/form/patchOps';
+	import type { OverrideInfo } from '$lib/form/effectiveValue';
 	import DynamicField from './DynamicField.svelte';
 
 	let {
 		descriptor,
 		value,
 		onFieldChange,
-		errorsForField = () => []
+		errorsForField = () => [],
+		path = [],
+		overrideInfo
 	}: {
 		descriptor: FieldDescriptor;
 		value: Record<string, unknown>;
 		onFieldChange: (key: string, value: unknown) => void;
 		errorsForField?: (key: string) => ValidationError[];
+		/** This object field's own path from the document root; children extend it with their own key. */
+		path?: PathSegment[];
+		overrideInfo?: OverrideInfo;
 	} = $props();
 </script>
 
@@ -28,6 +35,8 @@
 			value={value?.[field.key]}
 			errors={errorsForField(field.key)}
 			onchange={(fieldValue) => onFieldChange(field.key, fieldValue)}
+			path={[...path, field.key]}
+			{overrideInfo}
 		/>
 	{/each}
 </fieldset>

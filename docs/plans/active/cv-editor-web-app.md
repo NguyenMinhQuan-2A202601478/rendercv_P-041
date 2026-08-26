@@ -152,7 +152,16 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   picker, two-way sync via debounced atomic patch ops. Gates: just check
   clean, core 1537 passed, backend 29/29, Vitest 112/112, Playwright 6/6
   live, plus manual exploratory pass (user-confirmed on localhost:5173).
-- [ ] Phase 3: theme switcher with default merging.
+- [x] Phase 3: theme switcher with default merging + Design/Locale/Settings
+  forms. Verified 2026-08-27: tab-bar cycler + dropdown (9 themes), minimal
+  design YAML with effective-value overlay from /api/themes (overrides
+  survive theme switch, reset op deletes the leaf), per-theme schema
+  variant resolution, new controls (segmented/color/dimension/stepper),
+  12-row month tables. Gates: svelte-check 0 errors (300 files), Vitest
+  173/173, Playwright 10/10 live, exploratory pass clean (user-confirmed
+  on localhost:5173). Follow-up noted: backend returns an unhandled 500
+  when a design document lacks its `theme` discriminator — client avoids
+  it; fix server-side in a later phase.
 - [ ] Phase 4: auth, persistence, autosave, multi-CV sidebar.
 - [ ] Phase 5: WASM preview, undo/redo, landing page, polish.
 

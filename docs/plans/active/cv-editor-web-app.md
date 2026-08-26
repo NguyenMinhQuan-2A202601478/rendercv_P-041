@@ -137,7 +137,14 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   without `render_command` crashed `build_rendercv_dictionary` when render
   overrides were passed (KeyError) — default now re-ensured after overlay
   merge, regression test added.
-- [ ] Phase 1: YAML editor with live preview and inline errors.
+- [x] Phase 1: YAML editor with live preview and inline errors.
+  Verified 2026-08-26: CodeMirror 6 per-tab editor (own history/cursor),
+  /api/validate on the render debounce with inline gutter markers mapped
+  via yaml_source→tab and per-document yaml_line, click-to-jump error bar,
+  working undo/redo + B/I/link toolbar, zoom, filename-aware download.
+  Gates: svelte-check 0 errors, Vitest 53/53, build OK, Playwright e2e 3/3
+  against the live backend (valid edit → new blob; schema error → marker
+  on the right line with last-good preview kept; fix → marker clears).
 - [ ] Phase 2: schema-driven form editor with two-way sync.
 - [ ] Phase 3: theme switcher with default merging.
 - [ ] Phase 4: auth, persistence, autosave, multi-CV sidebar.

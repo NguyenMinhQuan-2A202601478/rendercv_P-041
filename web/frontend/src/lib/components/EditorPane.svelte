@@ -1,23 +1,36 @@
 <script lang="ts">
 	import type { Readable } from 'svelte/store';
-	import {
-		documents,
-		setDocument,
-		DOCUMENT_KEYS,
-		DOCUMENT_LABELS,
-		type DocumentKey
-	} from '$lib/stores/documents';
+	import { DOCUMENT_KEYS, DOCUMENT_LABELS, type DocumentKey } from '$lib/stores/documents';
 	import type { PreviewState } from '$lib/preview/renderController';
+	import type { ValidationError } from '$lib/api/validate';
+	import { groupErrorsByDocument } from '$lib/editor/errorClassification';
+	import { derivePdfFilename } from '$lib/editor/filename';
+	import { documents } from '$lib/stores/documents';
+	import YamlEditor from '$lib/components/YamlEditor.svelte';
 
-	let { previewState }: { previewState: Readable<PreviewState> } = $props();
+	let {
+		previewState,
+		errors = [],
+		zoom = $bindable(100)
+	}: { previewState: Readable<PreviewState>; errors?: ValidationError[]; zoom?: number } = $props();
 
 	let activeTab = $state<DocumentKey>('cv');
 	let yamlMode = $state(true);
-	let zoom = $state(100);
+	let yamlEditor: ReturnType<typeof YamlEditor> | undefined = $state();
+	let canUndo = $state(false);
+	let canRedo = $state(false);
 
-	function handleInput(key: DocumentKey, event: Event): void {
-		const target = event.currentTarget as HTMLTextAreaElement;
-		setDocument(key, target.value);
+	let errorsByTab = $derived(groupErrorsByDocument(errors));
+
+	// Whenever the error set changes, refresh gutter markers in all four
+	// documents so a tab a user hasn't opened yet is already annotated.
+	$effect(() => {
+		errors; // eslint-disable-line @typescript-eslint/no-unused-expressions -- track dependency
+		yamlEditor?.refreshAllDiagnostics();
+	});
+
+	function errorsForTab(key: DocumentKey): ValidationError[] {
+		return errorsByTab[key];
 	}
 
 	function zoomOut(): void {
@@ -28,19 +41,36 @@
 		zoom = Math.min(200, zoom + 10);
 	}
 
+	function resetZoom(): void {
+		zoom = 100;
+	}
+
 	function download(url: string | null): void {
 		if (!url) return;
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = 'cv.pdf';
+		link.download = derivePdfFilename($documents);
 		link.click();
 	}
 
 	function tabClass(key: DocumentKey): string {
-		const base = 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors';
+		const base = 'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors';
 		return activeTab === key
 			? `${base} bg-purple-600 text-white`
 			: `${base} text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800`;
+	}
+
+	/** Called by the preview pane's error bar: switches to the error's tab and moves the cursor there. */
+	export function goToError(error: ValidationError): void {
+		const key = errorsByTab
+			? (Object.keys(errorsByTab) as DocumentKey[]).find((k) => errorsByTab[k].includes(error))
+			: undefined;
+		if (key) activeTab = key;
+		yamlMode = true;
+		if (error.yaml_line !== null) {
+			// Wait a tick so the editor has switched to the right document first.
+			queueMicrotask(() => yamlEditor?.goToLine(error.yaml_line as number));
+		}
 	}
 </script>
 
@@ -61,6 +91,12 @@
 					onclick={() => (activeTab = key)}
 				>
 					{DOCUMENT_LABELS[key]}
+					{#if errorsForTab(key).length > 0}
+						<span
+							class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"
+							aria-label={`${errorsForTab(key).length} error(s) in ${DOCUMENT_LABELS[key]}`}
+						></span>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -88,65 +124,127 @@
 	<div
 		class="flex items-center justify-between border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
 	>
-		<div class="flex items-center gap-1" role="group" aria-label="Zoom controls">
-			<button
-				type="button"
-				class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-				aria-label="Zoom out"
-				disabled={zoom <= 50}
-				onclick={zoomOut}
-			>
-				−
-			</button>
-			<span class="w-12 text-center text-sm tabular-nums" aria-live="polite">{zoom}%</span>
-			<button
-				type="button"
-				class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-				aria-label="Zoom in"
-				disabled={zoom >= 200}
-				onclick={zoomIn}
-			>
-				+
-			</button>
+		<div class="flex items-center gap-1">
+			<div class="flex items-center gap-0.5" role="group" aria-label="Undo/redo">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Undo"
+					disabled={!yamlMode || !canUndo}
+					onclick={() => yamlEditor?.undoActive()}
+				>
+					↶
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Redo"
+					disabled={!yamlMode || !canRedo}
+					onclick={() => yamlEditor?.redoActive()}
+				>
+					↷
+				</button>
+			</div>
+
+			<div class="mx-1 h-4 w-px bg-neutral-300 dark:bg-neutral-700"></div>
+
+			<div class="flex items-center gap-0.5" role="group" aria-label="Markdown formatting">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm font-bold text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Bold"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapBold()}
+				>
+					B
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm italic text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Italic"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapItalic()}
+				>
+					I
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Insert link"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapLink()}
+				>
+					🔗
+				</button>
+			</div>
 		</div>
 
-		<button
-			type="button"
-			class="rounded-md border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-			disabled={!$previewState.url}
-			onclick={() => download($previewState.url)}
-		>
-			Download PDF
-		</button>
+		<div class="flex items-center gap-3">
+			<div class="flex items-center gap-1" role="group" aria-label="Zoom controls">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Zoom out"
+					disabled={zoom <= 50}
+					onclick={zoomOut}
+				>
+					−
+				</button>
+				<button
+					type="button"
+					class="w-12 text-center text-sm tabular-nums"
+					aria-label="Reset zoom to 100%"
+					onclick={resetZoom}
+				>
+					{zoom}%
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					aria-label="Zoom in"
+					disabled={zoom >= 200}
+					onclick={zoomIn}
+				>
+					+
+				</button>
+			</div>
+
+			<button
+				type="button"
+				class="rounded-md border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+				disabled={!$previewState.url}
+				onclick={() => download($previewState.url)}
+			>
+				Download PDF
+			</button>
+		</div>
 	</div>
 
 	<div class="flex-1 overflow-auto p-3">
-		{#each DOCUMENT_KEYS as key (key)}
-			<div
-				id={`panel-${key}`}
-				role="tabpanel"
-				aria-labelledby={`tab-${key}`}
-				hidden={activeTab !== key}
-				class="h-full"
-			>
-				{#if yamlMode}
-					<label class="sr-only" for={`yaml-${key}`}>{DOCUMENT_LABELS[key]} YAML</label>
-					<textarea
-						id={`yaml-${key}`}
-						class="h-full w-full resize-none rounded-md border border-neutral-200 bg-white p-3 font-mono text-sm text-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-						spellcheck="false"
-						value={$documents[key]}
-						oninput={(event) => handleInput(key, event)}
-					></textarea>
-				{:else}
-					<div
-						class="flex h-full items-center justify-center rounded-md border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700"
-					>
-						The form editor is generated from the schema in a later phase. Switch back to YAML to
-						edit {DOCUMENT_LABELS[key]}.
-					</div>
-				{/if}
-			</div>
-		{/each}
+		<div
+			id={`panel-${activeTab}`}
+			role="tabpanel"
+			aria-labelledby={`tab-${activeTab}`}
+			class="h-full"
+		>
+			{#if yamlMode}
+				<div class="h-full w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+					<YamlEditor
+						bind:this={yamlEditor}
+						activeKey={activeTab}
+						errorsForKey={errorsForTab}
+						bind:canUndo
+						bind:canRedo
+					/>
+				</div>
+			{:else}
+				<div
+					class="flex h-full items-center justify-center rounded-md border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700"
+				>
+					The form editor is generated from the schema in a later phase. Switch back to YAML to
+					edit {DOCUMENT_LABELS[activeTab]}.
+				</div>
+			{/if}
+		</div>
 	</div>
 </section>

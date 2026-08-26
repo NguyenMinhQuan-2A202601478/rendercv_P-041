@@ -83,7 +83,14 @@ describe('createRenderController', () => {
 			.mockResolvedValueOnce({ ok: true, blob: new Blob(['pdf']) })
 			.mockResolvedValueOnce({
 				ok: false,
-				errors: [{ location: 'cv.name', message: 'Field required', yaml_line: 2 }]
+				errors: [
+					{
+						location: 'cv.name',
+						message: 'Field required',
+						yaml_source: 'main_yaml_file',
+						yaml_line: 2
+					}
+				]
 			});
 		const revokeObjectURL = vi.fn();
 		const controller = createRenderController(source, {
@@ -103,7 +110,9 @@ describe('createRenderController', () => {
 
 		const state = get(controller.state);
 		expect(state.url).toBe('blob:good'); // last good preview retained
-		expect(state.errors).toEqual([{ location: 'cv.name', message: 'Field required', yaml_line: 2 }]);
+		expect(state.errors).toEqual([
+			{ location: 'cv.name', message: 'Field required', yaml_source: 'main_yaml_file', yaml_line: 2 }
+		]);
 		expect(revokeObjectURL).not.toHaveBeenCalled(); // only replaced on a new success
 		controller.destroy();
 	});

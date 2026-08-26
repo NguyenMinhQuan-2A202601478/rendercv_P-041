@@ -1,11 +1,7 @@
 import type { CvDocuments } from '$lib/stores/documents';
+import { parseValidationErrors, type ValidationError } from '$lib/api/validate';
 
-/** A single structured validation error, as returned by `POST /api/validate`. */
-export interface ValidationError {
-	location: string;
-	message: string;
-	yaml_line: number | null;
-}
+export type { ValidationError } from '$lib/api/validate';
 
 export type RenderResult =
 	| { ok: true; blob: Blob }
@@ -48,31 +44,13 @@ export async function renderPreview(
 		ok: false,
 		errors: [
 			{
-				location: 'request',
+				location: null,
 				message: text || `Render failed with status ${response.status}`,
+				yaml_source: 'main_yaml_file',
 				yaml_line: null
 			}
 		]
 	};
 }
 
-/** Normalizes the `{errors: [...]}` 422 payload into ValidationError[]. */
-export function parseValidationErrors(body: unknown): ValidationError[] {
-	if (
-		typeof body !== 'object' ||
-		body === null ||
-		!('errors' in body) ||
-		!Array.isArray((body as { errors: unknown }).errors)
-	) {
-		return [];
-	}
-
-	return (body as { errors: unknown[] }).errors.map((raw) => {
-		const entry = (raw ?? {}) as Record<string, unknown>;
-		return {
-			location: typeof entry.location === 'string' ? entry.location : 'unknown',
-			message: typeof entry.message === 'string' ? entry.message : 'Invalid value.',
-			yaml_line: typeof entry.yaml_line === 'number' ? entry.yaml_line : null
-		};
-	});
-}
+export { parseValidationErrors } from '$lib/api/validate';

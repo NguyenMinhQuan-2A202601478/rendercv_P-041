@@ -35,7 +35,14 @@ describe('renderPreview', () => {
 
 	it('returns structured errors on a 422 response', async () => {
 		const body = {
-			errors: [{ location: 'cv.name', message: 'Field required', yaml_line: 2 }]
+			errors: [
+				{
+					location: 'cv.name',
+					message: 'Field required',
+					yaml_source: 'main_yaml_file',
+					yaml_line: 2
+				}
+			]
 		};
 		const fetchMock = vi.fn(
 			async () =>
@@ -50,7 +57,12 @@ describe('renderPreview', () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.errors).toEqual([
-				{ location: 'cv.name', message: 'Field required', yaml_line: 2 }
+				{
+					location: 'cv.name',
+					message: 'Field required',
+					yaml_source: 'main_yaml_file',
+					yaml_line: 2
+				}
 			]);
 		}
 	});
@@ -70,14 +82,30 @@ describe('renderPreview', () => {
 describe('parseValidationErrors', () => {
 	it('normalizes a well-formed payload', () => {
 		const errors = parseValidationErrors({
-			errors: [{ location: 'design.theme', message: 'Unknown theme', yaml_line: 5 }]
+			errors: [
+				{
+					location: 'design.theme',
+					message: 'Unknown theme',
+					yaml_source: 'design_yaml_file',
+					yaml_line: 5
+				}
+			]
 		});
-		expect(errors).toEqual([{ location: 'design.theme', message: 'Unknown theme', yaml_line: 5 }]);
+		expect(errors).toEqual([
+			{
+				location: 'design.theme',
+				message: 'Unknown theme',
+				yaml_source: 'design_yaml_file',
+				yaml_line: 5
+			}
+		]);
 	});
 
 	it('fills in defaults for missing fields', () => {
 		const errors = parseValidationErrors({ errors: [{}] });
-		expect(errors).toEqual([{ location: 'unknown', message: 'Invalid value.', yaml_line: null }]);
+		expect(errors).toEqual([
+			{ location: 'unknown', message: 'Invalid value.', yaml_source: 'main_yaml_file', yaml_line: null }
+		]);
 	});
 
 	it('returns an empty array for a malformed payload', () => {

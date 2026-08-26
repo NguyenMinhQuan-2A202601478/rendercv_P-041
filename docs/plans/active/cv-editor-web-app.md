@@ -145,7 +145,13 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   Gates: svelte-check 0 errors, Vitest 53/53, build OK, Playwright e2e 3/3
   against the live backend (valid edit → new blob; schema error → marker
   on the right line with last-good preview kept; fix → marker clears).
-- [ ] Phase 2: schema-driven form editor with two-way sync.
+- [x] Phase 2: schema-driven form editor with two-way sync (CV tab).
+  Verified 2026-08-26: /api/documents/parse + /api/documents/patch
+  (ruamel round-trip, comments/order/quotes preserved — live-verified);
+  form generated from /api/schema, sections editor with 9-entry-type
+  picker, two-way sync via debounced atomic patch ops. Gates: just check
+  clean, core 1537 passed, backend 29/29, Vitest 112/112, Playwright 6/6
+  live, plus manual exploratory pass (user-confirmed on localhost:5173).
 - [ ] Phase 3: theme switcher with default merging.
 - [ ] Phase 4: auth, persistence, autosave, multi-CV sidebar.
 - [ ] Phase 5: WASM preview, undo/redo, landing page, polish.

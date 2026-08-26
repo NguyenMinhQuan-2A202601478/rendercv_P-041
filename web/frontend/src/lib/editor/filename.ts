@@ -35,7 +35,7 @@ function sanitizeFilename(name: string): string {
 /**
  * Derives the PDF download filename from the settings document's
  * `pdf_title`, substituting `NAME` with the CV's name when present, and
- * falling back to `cv.pdf` when `pdf_title` is absent or unparseable.
+ * falling back to `cv.pdf` when `pdf_title` is absent or unparsable.
  */
 export function derivePdfFilename(docs: CvDocuments): string {
 	const pdfTitle = extractScalar(docs.settings, 'pdf_title');

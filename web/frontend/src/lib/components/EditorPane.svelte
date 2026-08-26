@@ -7,6 +7,7 @@
 	import { derivePdfFilename } from '$lib/editor/filename';
 	import { documents } from '$lib/stores/documents';
 	import YamlEditor from '$lib/components/YamlEditor.svelte';
+	import CvForm from '$lib/components/form/CvForm.svelte';
 
 	let {
 		previewState,
@@ -237,12 +238,14 @@
 						bind:canRedo
 					/>
 				</div>
+			{:else if activeTab === 'cv'}
+				<CvForm errors={errorsForTab('cv')} />
 			{:else}
 				<div
 					class="flex h-full items-center justify-center rounded-md border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700"
 				>
-					The form editor is generated from the schema in a later phase. Switch back to YAML to
-					edit {DOCUMENT_LABELS[activeTab]}.
+					The form editor for {DOCUMENT_LABELS[activeTab]} is generated from the schema in a
+					later phase. Switch back to YAML to edit it.
 				</div>
 			{/if}
 		</div>

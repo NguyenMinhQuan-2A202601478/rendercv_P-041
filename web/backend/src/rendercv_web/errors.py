@@ -19,7 +19,14 @@ from rendercv.exception import (
     RenderCVValidationError,
 )
 
-from .models import InternalErrorResponse, ValidationErrorItem, ValidationErrorResponse
+from .documents import DocumentPatchError
+from .models import (
+    InternalErrorResponse,
+    PatchOpErrorDetail,
+    PatchOpErrorResponse,
+    ValidationErrorItem,
+    ValidationErrorResponse,
+)
 
 logger = logging.getLogger("rendercv_web")
 
@@ -76,6 +83,17 @@ def register_exception_handlers(app: FastAPI) -> None:
             ]
         )
         return JSONResponse(status_code=422, content=body.model_dump())
+
+    @app.exception_handler(DocumentPatchError)
+    async def handle_patch_op_error(
+        request: Request, exc: DocumentPatchError
+    ) -> JSONResponse:
+        """Translate a failed patch operation into a 400 response."""
+        del request
+        body = PatchOpErrorResponse(
+            error=PatchOpErrorDetail(op_index=exc.op_index, message=exc.message)
+        )
+        return JSONResponse(status_code=400, content=body.model_dump())
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

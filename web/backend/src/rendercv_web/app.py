@@ -13,10 +13,22 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from rendercv.schema.rendercv_model_builder import read_yaml_with_validation_errors
+
 from .cache import cache_key_for, render_cache
 from .core import CvDocuments, render_documents_to_pdf, validate_documents
+from .documents import apply_patch_ops, to_json_safe
 from .errors import register_exception_handlers
-from .models import MAX_DOCUMENT_BYTES, CvDocumentsRequest, ThemeInfo, ValidResponse
+from .models import (
+    MAX_DOCUMENT_BYTES,
+    CvDocumentsRequest,
+    ParseRequest,
+    ParseResponse,
+    PatchRequest,
+    PatchResponse,
+    ThemeInfo,
+    ValidResponse,
+)
 from .schema import load_schema
 from .themes import list_theme_defaults
 
@@ -43,12 +55,29 @@ render_executor = concurrent.futures.ThreadPoolExecutor(
 )
 
 
-def enforce_document_size_cap(request: CvDocumentsRequest) -> None:
-    """Reject any single document over the size cap before it reaches the core.
+def enforce_yaml_size_cap(yaml_text: str, field_name: str = "yaml") -> None:
+    """Reject a single YAML document over the size cap before it reaches the core.
 
     Why:
         Guardrails ("trust no one"): request bodies are attacker-controlled;
         cap sizes explicitly rather than assuming the client behaves.
+
+    Args:
+        yaml_text: The document text to check.
+        field_name: Name to report in the error detail.
+
+    Raises:
+        HTTPException: 413 if `yaml_text` exceeds `MAX_DOCUMENT_BYTES`.
+    """
+    if len(yaml_text.encode("utf-8")) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"`{field_name}` exceeds the {MAX_DOCUMENT_BYTES} byte limit.",
+        )
+
+
+def enforce_document_size_cap(request: CvDocumentsRequest) -> None:
+    """Reject any single document over the size cap before it reaches the core.
 
     Args:
         request: The four YAML documents from the client.
@@ -57,11 +86,7 @@ def enforce_document_size_cap(request: CvDocumentsRequest) -> None:
         HTTPException: 413 if any document exceeds `MAX_DOCUMENT_BYTES`.
     """
     for field_name, value in request.model_dump().items():
-        if len(value.encode("utf-8")) > MAX_DOCUMENT_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"`{field_name}` exceeds the {MAX_DOCUMENT_BYTES} byte limit.",
-            )
+        enforce_yaml_size_cap(value, field_name)
 
 
 def to_documents(request: CvDocumentsRequest) -> CvDocuments:
@@ -154,3 +179,53 @@ def themes() -> list[ThemeInfo]:
         One entry per built-in theme (name + default design options).
     """
     return list_theme_defaults()
+
+
+@app.post("/api/documents/parse", response_model=ParseResponse)
+def parse_document(request: ParseRequest) -> ParseResponse:
+    """Parse one YAML document into JSON via the core's YAML reader.
+
+    Why:
+        Reuses `read_yaml_with_validation_errors` so a YAML syntax error
+        here produces exactly the same structured `{errors: [...]}` shape
+        `/api/validate` does, with `yaml_source` fixed to
+        `"main_yaml_file"` since there's only one document.
+
+    Args:
+        request: The YAML document to parse.
+
+    Returns:
+        The parsed document as JSON-safe data, top-level key included.
+
+    Raises:
+        HTTPException: 413 if the document exceeds the size cap.
+    """
+    enforce_yaml_size_cap(request.yaml)
+    document = read_yaml_with_validation_errors(request.yaml, "main_yaml_file")
+    return ParseResponse(data=to_json_safe(document))
+
+
+@app.post("/api/documents/patch", response_model=PatchResponse)
+def patch_document(request: PatchRequest) -> PatchResponse:
+    """Apply an ordered list of structural edits to a YAML document.
+
+    Why:
+        Backs the form editor's writes into the raw YAML view: comments,
+        key order, and quoting style must survive edits made through the
+        form, so ops are applied via ruamel's round-trip representation
+        instead of re-serializing the document from scratch.
+
+    Args:
+        request: The YAML document and the ops to apply to it.
+
+    Returns:
+        The updated YAML document.
+
+    Raises:
+        HTTPException: 413 if the document exceeds the size cap.
+        DocumentPatchError: 400 (via the exception boundary) if any op
+            fails; no partial result is returned.
+    """
+    enforce_yaml_size_cap(request.yaml)
+    updated_yaml = apply_patch_ops(request.yaml, request.ops)
+    return PatchResponse(yaml=updated_yaml)

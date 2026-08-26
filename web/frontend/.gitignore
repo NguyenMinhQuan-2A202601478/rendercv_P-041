@@ -21,3 +21,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Re-include src/lib (root .gitignore excludes any lib/ directory)
+!src/lib/

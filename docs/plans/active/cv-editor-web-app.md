@@ -129,7 +129,14 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
 
 ## Progress
 
-- [ ] Phase 0: scaffold backend + frontend, `/api/render` returns a PDF.
+- [x] Phase 0: scaffold backend + frontend, `/api/render` returns a PDF.
+  Verified end-to-end 2026-08-26: backend 11/11 contract tests; frontend
+  svelte-check 0 errors, 14 unit tests, production build OK; live loop in
+  browser (edit YAML → debounce → `POST /api/render` 200 → blob PDF in
+  preview). Fixed a core bug found by this integration: a settings overlay
+  without `render_command` crashed `build_rendercv_dictionary` when render
+  overrides were passed (KeyError) — default now re-ensured after overlay
+  merge, regression test added.
 - [ ] Phase 1: YAML editor with live preview and inline errors.
 - [ ] Phase 2: schema-driven form editor with two-way sync.
 - [ ] Phase 3: theme switcher with default merging.

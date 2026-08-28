@@ -1,42 +1,23 @@
-# sv
+# rendercv-web-frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit + TypeScript + Tailwind UI for the RenderCV Web Editor: the
+three-pane layout, the four document tabs with form/YAML two-way sync,
+the theme switcher, autosave, and the live PDF preview.
 
-## Creating a project
+It talks to `web/backend` over `/api` (proxied to port 8000 in dev), and
+optionally renders entirely in the browser via the client-side WASM
+engine in `src/lib/wasm/`.
 
-If you're seeing this, you've probably already done this step. Congrats!
+**Setup, how to run, and how to test everything are documented once, for
+both halves of the app, in [`../README.md`](../README.md).** Start there.
 
-```sh
-# create a new project
-npx sv create my-app
-```
+Quick reference for the scripts in this workspace:
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --add tailwindcss="plugins:none" vitest="usages:unit" --install npm web/frontend
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on port 5173 (needs the backend on 8000). |
+| `npm run check` | `svelte-check` type-check. |
+| `npm run test` | Vitest unit tests, single run. |
+| `npm run build` | Production build. |
+| `npm run test:e2e` | Playwright. **Requires a backend on a throwaway database** -- see the root web README. |
+| `npm run build:wasm-assets` | Builds the ~30 MB opt-in WASM preview assets into the gitignored `static/wasm/`. |

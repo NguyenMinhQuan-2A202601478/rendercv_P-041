@@ -172,7 +172,26 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   properly (startPaused controllers + data-app-ready + gotoReady):
   13/13 x5 consecutive runs. Gates: backend 74/74, Vitest 234/234,
   core 1538 passed, just check clean. OAuth seam left in schema.
-- [ ] Phase 5: WASM preview, undo/redo, landing page, polish.
+- [x] Phase 5: WASM preview, undo/redo, landing page, polish.
+  Wave 1 (2026-08-27): form UI parity with the reference, /welcome
+  landing, ruamel thread-safety root-cause fix (+ regression tests),
+  alembic logging fix, friendly system-error banner. Wave 2: dark mode
+  (class-strategy Tailwind, pre-paint apply, WCAG AA contrast audit,
+  CodeMirror dark theme) and full client-side WASM preview (Pyodide
+  runs the core wheel -> .typ; typst.ts compiles to PDF with local
+  package registry + font subset; behind localStorage flag
+  rendercv.wasmPreview, default off; server render stays canonical;
+  ~17-20s cold start, ~0.2-0.9s per render warm; zero /api/render
+  calls when active). Wave 3 (2026-08-28, reference parity): resizable
+  editor/preview splitter (persisted split_ratio preference, iframe
+  drag shield, keyboard accessible), navy dark palette via CSS tokens
+  (--surface family in layout.css), dark CodeMirror syntax colors
+  (amber values / blue keys), reference toolbar+sidebar chrome
+  ordering. Final gates (waves 2+3 together): svelte-check 0 errors
+  (360 files), Vitest 288/288, Playwright 28/28 (incl. wasm +
+  darkmode + splitter specs), backend 75/75, core 1538 passed.
+  Waves 2+3 are code-complete on disk, awaiting user approval to
+  commit as the roadmap-closing commit.
 
 ## Decisions
 

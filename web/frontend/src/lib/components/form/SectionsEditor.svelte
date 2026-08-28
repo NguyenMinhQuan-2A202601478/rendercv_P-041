@@ -135,7 +135,7 @@
 	}
 
 	const inputClass =
-		'w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100';
+		'w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100';
 </script>
 
 <div class="flex flex-col gap-4">
@@ -143,7 +143,7 @@
 		{@const entries = sections[title] ?? []}
 		{@const type = sectionType(title)}
 		<section class="flex flex-col gap-2" aria-label={`Section: ${title}`}>
-			<div class="group/heading flex items-center gap-2 border-b-2 border-neutral-200 pb-1.5 dark:border-neutral-700">
+			<div class="group/heading flex items-center gap-2 border-b-2 border-neutral-200 pb-1.5 dark:border-[var(--border-subtle)]">
 				{#if editingTitleIndex === si}
 					<label class="sr-only" for={`section-title-${si}`}>Section title</label>
 					<!-- svelte-ignore a11y_autofocus -- deliberate: this input only exists while the user is actively editing this section's title (click-to-edit), so moving focus into it here is expected, not a surprise page-load autofocus. -->
@@ -178,7 +178,7 @@
 				{/if}
 				<button
 					type="button"
-					class="shrink-0 rounded px-1.5 py-1 text-neutral-400 opacity-0 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:opacity-100 group-hover/heading:opacity-100 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+					class="shrink-0 rounded px-1.5 py-1 text-neutral-400 opacity-0 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:opacity-100 group-hover/heading:opacity-100 dark:text-neutral-500 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-200"
 					aria-label={`Delete section ${displaySectionTitle(title)}`}
 					title="Delete section"
 					onclick={() => deleteSection(title)}
@@ -204,7 +204,7 @@
 						>
 							<button
 								type="button"
-								class="absolute left-0 top-1.5 grid h-6 w-6 cursor-grab place-items-center rounded text-neutral-400 opacity-0 hover:bg-neutral-100 focus-visible:opacity-100 group-hover/entry:opacity-100 active:cursor-grabbing dark:text-neutral-500 dark:hover:bg-neutral-800"
+								class="absolute left-0 top-1.5 grid h-6 w-6 cursor-grab place-items-center rounded text-neutral-400 opacity-0 hover:bg-neutral-100 focus-visible:opacity-100 group-hover/entry:opacity-100 active:cursor-grabbing dark:text-neutral-500 dark:hover:bg-[var(--surface-card)]"
 								aria-label={`Reorder entry ${ei + 1} of ${entries.length} (drag, or press Arrow Up / Arrow Down while focused)`}
 								title="Drag to reorder, or use Arrow Up / Arrow Down"
 								draggable="true"
@@ -244,7 +244,7 @@
 				</ul>
 				<button
 					type="button"
-					class="mt-1 w-full rounded-md border border-dashed border-neutral-300 py-1.5 text-sm font-medium text-neutral-500 hover:border-purple-400 hover:text-purple-600 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-purple-500 dark:hover:text-purple-400"
+					class="mt-1 w-full rounded-md border border-dashed border-neutral-300 py-1.5 text-sm font-medium text-neutral-500 hover:border-purple-400 hover:text-purple-600 dark:border-[var(--border-subtle)] dark:text-neutral-400 dark:hover:border-purple-500 dark:hover:text-purple-400"
 					onclick={() => addEntry(title, type ?? 'TextEntry')}
 				>
 					+ Add {addEntryLabel(title)} entry
@@ -266,7 +266,7 @@
 		/>
 		<button
 			type="button"
-			class="whitespace-nowrap rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+			class="whitespace-nowrap rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
 			onclick={addSection}
 		>
 			+ Add section

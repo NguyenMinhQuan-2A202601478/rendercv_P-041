@@ -99,14 +99,14 @@
 	}
 
 	const iconButtonClass =
-		'grid h-6 w-6 shrink-0 place-items-center rounded text-neutral-400 opacity-0 group-hover/highlight:opacity-100 hover:bg-neutral-100 focus-visible:opacity-100 disabled:opacity-30 dark:text-neutral-500 dark:hover:bg-neutral-800';
+		'grid h-6 w-6 shrink-0 place-items-center rounded text-neutral-400 opacity-0 group-hover/highlight:opacity-100 hover:bg-neutral-100 focus-visible:opacity-100 disabled:opacity-30 dark:text-neutral-500 dark:hover:bg-[var(--surface-card)]';
 </script>
 
 <div class="flex flex-col gap-1">
 	<div class="flex items-start gap-1.5">
 		<button
 			type="button"
-			class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-neutral-800 dark:hover:text-neutral-300"
+			class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:text-neutral-500 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-300"
 			aria-expanded={!collapsed}
 			aria-controls={bodyId}
 			aria-label={collapsed ? 'Expand entry' : 'Collapse entry'}
@@ -146,7 +146,7 @@
 			{/each}
 
 			{#if highlightsField}
-				<div class="flex flex-col gap-1 border-t border-neutral-100 pt-2 dark:border-neutral-800">
+				<div class="flex flex-col gap-1 border-t border-neutral-100 pt-2 dark:border-[var(--border-subtle)]">
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-medium text-neutral-700 dark:text-neutral-300">{highlightsField.label}</span>
 						<button
@@ -158,11 +158,11 @@
 						</button>
 					</div>
 					{#if highlights.length === 0}
-						<p class="text-xs text-neutral-400 dark:text-neutral-500">None yet.</p>
+						<p class="text-xs text-neutral-400 dark:text-neutral-400">None yet.</p>
 					{/if}
 					<ul class="flex flex-col">
 						{#each highlights as highlight, hi (hi)}
-							<li class="group/highlight flex items-start gap-2 border-b border-neutral-100 py-1.5 last:border-b-0 dark:border-neutral-800">
+							<li class="group/highlight flex items-start gap-2 border-b border-neutral-100 py-1.5 last:border-b-0 dark:border-[var(--border-subtle)]">
 								<textarea
 									rows="1"
 									aria-label={`Highlight ${hi + 1}`}

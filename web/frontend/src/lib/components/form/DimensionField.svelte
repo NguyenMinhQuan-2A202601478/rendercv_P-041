@@ -44,13 +44,13 @@
 			{id}
 			type="number"
 			step="0.01"
-			class="w-24 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+			class="w-24 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100"
 			value={parsed.amount}
 			oninput={handleAmountInput}
 		/>
 		<select
 			aria-label="Unit"
-			class="rounded-md border border-neutral-300 bg-white px-1.5 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+			class="rounded-md border border-neutral-300 bg-white px-1.5 py-1.5 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100"
 			value={parsed.unit}
 			onchange={handleUnitChange}
 		>
@@ -63,7 +63,7 @@
 	<input
 		{id}
 		type="text"
-		class="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-600"
+		class="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100 dark:placeholder:text-neutral-600"
 		placeholder="e.g. 0.7in"
 		{value}
 		oninput={handleRawInput}

@@ -27,6 +27,16 @@ export default defineConfig({
 			}
 		}
 	},
+	worker: {
+		// The client-side (wasm) preview engine's worker
+		// (src/lib/wasm/engine.worker.ts) is constructed with `{ type:
+		// 'module' }` and both statically imports an ESM-only package
+		// (@myriaddreamin/typst.ts) and dynamically imports Pyodide's ESM
+		// build from a CDN URL at runtime. Building it as an ES module
+		// (Vite's default worker format is the legacy 'iife') keeps the dev
+		// and production behavior of those imports consistent.
+		format: 'es'
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

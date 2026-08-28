@@ -23,7 +23,7 @@
 	} = $props();
 </script>
 
-<div class="flex flex-col gap-2 border-b border-neutral-100 py-2 last:border-b-0 dark:border-neutral-800">
+<div class="flex flex-col gap-2 border-b border-neutral-100 py-2 last:border-b-0 dark:border-[var(--border-subtle)]">
 	<div class="flex items-center gap-1">
 		<span
 			class="text-sm font-medium"
@@ -31,7 +31,7 @@
 			class:dark:text-neutral-300={overridden}
 			class:italic={!overridden}
 			class:text-neutral-400={!overridden}
-			class:dark:text-neutral-500={!overridden}
+			class:dark:text-neutral-400={!overridden}
 		>
 			{label}
 		</span>
@@ -57,7 +57,7 @@
 				<input
 					id={`month-${label}-${i}`}
 					type="text"
-					class="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+					class="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100"
 					value={values[i] ?? ''}
 					oninput={(e) => onChangeIndex(i, (e.currentTarget as HTMLInputElement).value)}
 				/>

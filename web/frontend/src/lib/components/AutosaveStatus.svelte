@@ -25,7 +25,7 @@
 	{#if $state.status === 'error' && onRetry}
 		<button
 			type="button"
-			class="ml-1 rounded border border-neutral-300 px-1.5 py-0.5 text-xs font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+			class="ml-1 rounded border border-neutral-300 px-1.5 py-0.5 text-xs font-medium hover:bg-neutral-100 dark:border-[var(--border-subtle)] dark:hover:bg-[var(--surface-card)]"
 			onclick={onRetry}
 		>
 			Retry

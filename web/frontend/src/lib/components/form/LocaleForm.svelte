@@ -130,7 +130,7 @@
 	{:else}
 		<section
 			aria-label="Locale language"
-			class="rounded-md border border-neutral-200 px-3 py-1 dark:border-neutral-700"
+			class="rounded-md border border-neutral-200 px-3 py-1 dark:border-[var(--border-subtle)]"
 		>
 			<div class="flex items-center justify-between py-2">
 				<label for="locale-language" class="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -148,7 +148,7 @@
 
 		<section
 			aria-label="Locale labels"
-			class="rounded-md border border-neutral-200 px-3 dark:border-neutral-700"
+			class="rounded-md border border-neutral-200 px-3 dark:border-[var(--border-subtle)]"
 		>
 			{#each labelFields as field (field.key)}
 				<DynamicField
@@ -165,7 +165,7 @@
 		{#if monthNamesField}
 			<section
 				aria-label="Month names"
-				class="rounded-md border border-neutral-200 px-3 dark:border-neutral-700"
+				class="rounded-md border border-neutral-200 px-3 dark:border-[var(--border-subtle)]"
 			>
 				<MonthTable
 					label="Month names"
@@ -181,7 +181,7 @@
 		{#if monthAbbreviationsField}
 			<section
 				aria-label="Month abbreviations"
-				class="rounded-md border border-neutral-200 px-3 dark:border-neutral-700"
+				class="rounded-md border border-neutral-200 px-3 dark:border-[var(--border-subtle)]"
 			>
 				<MonthTable
 					label="Month abbreviations"

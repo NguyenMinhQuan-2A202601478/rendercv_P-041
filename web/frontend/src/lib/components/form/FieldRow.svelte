@@ -76,11 +76,11 @@
 	}
 
 	const inputClass =
-		'w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-600';
+		'w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)] dark:text-neutral-100 dark:placeholder:text-neutral-600';
 </script>
 
 <div
-	class="flex flex-col gap-1 border-b border-neutral-100 py-2 last:border-b-0 dark:border-neutral-800 sm:flex-row sm:items-start sm:gap-4"
+	class="flex flex-col gap-1 border-b border-neutral-100 py-2 last:border-b-0 dark:border-[var(--border-subtle)] sm:flex-row sm:items-start sm:gap-4"
 >
 	<div class="flex w-full shrink-0 items-center gap-1 sm:w-40">
 		<label
@@ -90,7 +90,7 @@
 			class:dark:text-neutral-300={isOverridden}
 			class:italic={!isOverridden}
 			class:text-neutral-400={!isOverridden}
-			class:dark:text-neutral-500={!isOverridden}
+			class:dark:text-neutral-400={!isOverridden}
 		>
 			{descriptor.label}
 			{#if descriptor.required}
@@ -183,7 +183,7 @@
 		{/if}
 
 		{#if descriptor.description}
-			<p class="text-xs text-neutral-400 dark:text-neutral-500">{descriptor.description}</p>
+			<p class="text-xs text-neutral-400 dark:text-neutral-400">{descriptor.description}</p>
 		{/if}
 
 		{#if errors.length > 0}

@@ -32,7 +32,7 @@
 			class:text-white={value === option}
 			class:border-neutral-300={value !== option}
 			class:text-neutral-600={value !== option}
-			class:dark:border-neutral-700={value !== option}
+			class:dark:border-[var(--border-subtle)]={value !== option}
 			class:dark:text-neutral-300={value !== option}
 			onclick={() => onchange(option)}
 		>

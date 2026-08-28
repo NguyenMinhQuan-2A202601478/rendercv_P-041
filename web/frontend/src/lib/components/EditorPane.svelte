@@ -7,6 +7,7 @@
 	import { groupErrorsByDocument } from '$lib/editor/errorClassification';
 	import { derivePdfFilename } from '$lib/editor/filename';
 	import { documents } from '$lib/stores/documents';
+	import { theme } from '$lib/stores/theme';
 	import { fetchThemes } from '$lib/api/themes';
 	import { createFormSync } from '$lib/form/formSync';
 	import { buildDiscriminatorSwitchOp } from '$lib/form/documentActions';
@@ -24,6 +25,7 @@
 		errors = [],
 		zoom = $bindable(100),
 		yamlMode = $bindable(true),
+		sidebarCollapsed = $bindable(false),
 		autosaveState,
 		onResolveConflict = () => {},
 		onRetrySave = () => {}
@@ -32,6 +34,7 @@
 		errors?: ValidationError[];
 		zoom?: number;
 		yamlMode?: boolean;
+		sidebarCollapsed?: boolean;
 		autosaveState: Readable<AutosaveState>;
 		onResolveConflict?: (action: 'reload' | 'overwrite') => void;
 		onRetrySave?: () => void;
@@ -41,6 +44,7 @@
 	let yamlEditor: ReturnType<typeof YamlEditor> | undefined = $state();
 	let canUndo = $state(false);
 	let canRedo = $state(false);
+	let downloadMenuOpen = $state(false);
 
 	let errorsByTab = $derived(groupErrorsByDocument(errors));
 
@@ -110,11 +114,29 @@
 		link.click();
 	}
 
+	function toggleDownloadMenu(): void {
+		downloadMenuOpen = !downloadMenuOpen;
+	}
+
+	function closeDownloadMenu(): void {
+		downloadMenuOpen = false;
+	}
+
+	function downloadFromMenu(): void {
+		download($previewState.url);
+		closeDownloadMenu();
+	}
+
+	function toggleSidebar(): void {
+		sidebarCollapsed = !sidebarCollapsed;
+	}
+
+	/** Active tab reads as a solid pill that swaps light/dark with the theme (white-on-navy in dark mode, dark-on-white in light) -- the reference's tab bar. */
 	function tabClass(key: DocumentKey): string {
 		const base = 'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors';
 		return activeTab === key
-			? `${base} bg-purple-600 text-white`
-			: `${base} text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800`;
+			? `${base} bg-neutral-900 text-white dark:bg-white dark:text-neutral-900`
+			: `${base} text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]`;
 	}
 
 	/** Called by the preview pane's error bar: switches to the error's tab and moves the cursor there. */
@@ -132,8 +154,217 @@
 </script>
 
 <section class="flex h-full flex-col" aria-label="CV editor">
+	<!--
+		Toolbar row -- left to right, matching the reference's chrome
+		ordering: sidebar-collapse, undo/redo, a divider, the markdown B/I/
+		link group, a flex gap, then the autosave indicator, YAML toggle,
+		zoom controls, download (with its format-menu caret), and the
+		light/dark toggle pinned at the far right.
+	-->
+	<div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-neutral-200 px-3 py-1.5 dark:border-[var(--border-subtle)]">
+		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				class="grid h-6 w-6 shrink-0 place-items-center rounded text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+				aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+				aria-expanded={!sidebarCollapsed}
+				onclick={toggleSidebar}
+			>
+				<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+					<rect x="3" y="4" width="18" height="16" rx="2" />
+					<path d="M9 4v16" />
+				</svg>
+			</button>
+
+			<div class="flex items-center gap-0.5" role="group" aria-label="Undo/redo">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Undo"
+					disabled={!yamlMode || !canUndo}
+					onclick={() => yamlEditor?.undoActive()}
+				>
+					↶
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Redo"
+					disabled={!yamlMode || !canRedo}
+					onclick={() => yamlEditor?.redoActive()}
+				>
+					↷
+				</button>
+			</div>
+
+			<div class="h-4 w-px bg-neutral-300 dark:bg-[var(--border-subtle)]"></div>
+
+			<div class="flex items-center gap-0.5" role="group" aria-label="Markdown formatting">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm font-bold text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Bold"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapBold()}
+				>
+					B
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm italic text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Italic"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapItalic()}
+				>
+					I
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Insert link"
+					disabled={!yamlMode}
+					onclick={() => yamlEditor?.wrapLink()}
+				>
+					🔗
+				</button>
+			</div>
+		</div>
+
+		<!--
+			Everything from the autosave indicator onward, grouped so the
+			outer row's `justify-between` + `flex-wrap` can drop this whole
+			cluster to its own line on a narrow pane instead of letting any
+			single control overflow past the pane's edge (where it would sit
+			underneath -- and be pointer-shadowed by -- the preview iframe).
+		-->
+		<div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+			<AutosaveStatus state={autosaveState} onRetry={onRetrySave} />
+
+			<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+				<span>YAML</span>
+				<button
+					type="button"
+					role="switch"
+					aria-checked={yamlMode}
+					aria-label="Toggle YAML editor"
+					class="relative h-5 w-9 rounded-full transition-colors"
+					class:bg-purple-600={yamlMode}
+					class:bg-neutral-300={!yamlMode}
+					onclick={() => (yamlMode = !yamlMode)}
+				>
+					<span
+						class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left]"
+						style={`left: ${yamlMode ? '1.25rem' : '0.125rem'}`}
+					></span>
+				</button>
+			</label>
+
+			<div class="flex items-center gap-1" role="group" aria-label="Zoom controls">
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Zoom out"
+					disabled={zoom <= 50}
+					onclick={zoomOut}
+				>
+					−
+				</button>
+				<button
+					type="button"
+					class="w-12 text-center text-sm tabular-nums"
+					aria-label="Reset zoom to 100%"
+					onclick={resetZoom}
+				>
+					{zoom}%
+				</button>
+				<button
+					type="button"
+					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+					aria-label="Zoom in"
+					disabled={zoom >= 200}
+					onclick={zoomIn}
+				>
+					+
+				</button>
+			</div>
+
+			<div class="relative flex items-center" role="group" aria-label="Download">
+				<button
+					type="button"
+					class="whitespace-nowrap rounded-l-md border border-r-0 border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
+					disabled={!$previewState.url}
+					onclick={() => download($previewState.url)}
+				>
+					Download PDF
+				</button>
+				<button
+					type="button"
+					class="grid h-[30px] w-6 place-items-center rounded-r-md border border-neutral-300 text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
+					disabled={!$previewState.url}
+					aria-label="More download options"
+					aria-haspopup="menu"
+					aria-expanded={downloadMenuOpen}
+					onclick={toggleDownloadMenu}
+				>
+					▾
+				</button>
+
+				{#if downloadMenuOpen}
+					<button
+						type="button"
+						class="fixed inset-0 z-10 cursor-default"
+						aria-label="Close menu"
+						tabindex="-1"
+						onclick={closeDownloadMenu}
+					></button>
+					<ul
+						role="menu"
+						aria-label="Download options"
+						class="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
+					>
+						<li role="none">
+							<!-- Only "Download PDF" exists today -- the caret is a seam
+							for future formats (e.g. Markdown/HTML export), not a fake
+							feature; this single item is real and functional. -->
+							<button
+								role="menuitem"
+								type="button"
+								class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+								onclick={downloadFromMenu}
+							>
+								Download PDF
+							</button>
+						</li>
+					</ul>
+				{/if}
+			</div>
+
+			<button
+				type="button"
+				class="grid h-7 w-7 place-items-center rounded-md text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
+				aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+				title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+				onclick={() => theme.toggle()}
+			>
+				{#if $theme === 'dark'}
+					<!-- Sun icon: shown in dark mode, click switches to light. -->
+					<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						<circle cx="12" cy="12" r="4" />
+						<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+					</svg>
+				{:else}
+					<!-- Moon icon: shown in light mode, click switches to dark. -->
+					<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+						<path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 1020.354 15.354z" />
+					</svg>
+				{/if}
+			</button>
+		</div>
+	</div>
+
+	<!-- Tab row: the four document tabs, plus the theme quick-switcher. -->
 	<div
-		class="flex flex-wrap items-center justify-between gap-y-1 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800"
+		class="flex flex-wrap items-center justify-between gap-y-1 border-b border-neutral-200 px-3 py-2 dark:border-[var(--border-subtle)]"
 	>
 		<div role="tablist" aria-label="CV sections" class="flex gap-1">
 			{#each DOCUMENT_KEYS as key (key)}
@@ -158,129 +389,7 @@
 			{/each}
 		</div>
 
-		<div class="flex items-center gap-4">
-			<AutosaveStatus state={autosaveState} onRetry={onRetrySave} />
-
-			<ThemeSwitcher {themeNames} {currentTheme} onSwitch={switchTheme} />
-
-			<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-				<span>YAML</span>
-			<button
-				type="button"
-				role="switch"
-				aria-checked={yamlMode}
-				aria-label="Toggle YAML editor"
-				class="relative h-5 w-9 rounded-full transition-colors"
-				class:bg-purple-600={yamlMode}
-				class:bg-neutral-300={!yamlMode}
-				onclick={() => (yamlMode = !yamlMode)}
-			>
-				<span
-					class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left]"
-					style={`left: ${yamlMode ? '1.25rem' : '0.125rem'}`}
-				></span>
-			</button>
-			</label>
-		</div>
-	</div>
-
-	<div
-		class="flex items-center justify-between border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800"
-	>
-		<div class="flex items-center gap-1">
-			<div class="flex items-center gap-0.5" role="group" aria-label="Undo/redo">
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Undo"
-					disabled={!yamlMode || !canUndo}
-					onclick={() => yamlEditor?.undoActive()}
-				>
-					↶
-				</button>
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Redo"
-					disabled={!yamlMode || !canRedo}
-					onclick={() => yamlEditor?.redoActive()}
-				>
-					↷
-				</button>
-			</div>
-
-			<div class="mx-1 h-4 w-px bg-neutral-300 dark:bg-neutral-700"></div>
-
-			<div class="flex items-center gap-0.5" role="group" aria-label="Markdown formatting">
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-sm font-bold text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Bold"
-					disabled={!yamlMode}
-					onclick={() => yamlEditor?.wrapBold()}
-				>
-					B
-				</button>
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-sm italic text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Italic"
-					disabled={!yamlMode}
-					onclick={() => yamlEditor?.wrapItalic()}
-				>
-					I
-				</button>
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Insert link"
-					disabled={!yamlMode}
-					onclick={() => yamlEditor?.wrapLink()}
-				>
-					🔗
-				</button>
-			</div>
-		</div>
-
-		<div class="flex items-center gap-3">
-			<div class="flex items-center gap-1" role="group" aria-label="Zoom controls">
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Zoom out"
-					disabled={zoom <= 50}
-					onclick={zoomOut}
-				>
-					−
-				</button>
-				<button
-					type="button"
-					class="w-12 text-center text-sm tabular-nums"
-					aria-label="Reset zoom to 100%"
-					onclick={resetZoom}
-				>
-					{zoom}%
-				</button>
-				<button
-					type="button"
-					class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
-					aria-label="Zoom in"
-					disabled={zoom >= 200}
-					onclick={zoomIn}
-				>
-					+
-				</button>
-			</div>
-
-			<button
-				type="button"
-				class="rounded-md border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-				disabled={!$previewState.url}
-				onclick={() => download($previewState.url)}
-			>
-				Download PDF
-			</button>
-		</div>
+		<ThemeSwitcher {themeNames} {currentTheme} onSwitch={switchTheme} />
 	</div>
 
 	{#if $autosaveState.status === 'conflict'}
@@ -330,7 +439,7 @@
 			class="h-full"
 		>
 			{#if yamlMode}
-				<div class="h-full w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+				<div class="h-full w-full rounded-md border border-neutral-200 bg-white dark:border-[var(--border-subtle)] dark:bg-[var(--surface)]">
 					<YamlEditor
 						bind:this={yamlEditor}
 						activeKey={activeTab}

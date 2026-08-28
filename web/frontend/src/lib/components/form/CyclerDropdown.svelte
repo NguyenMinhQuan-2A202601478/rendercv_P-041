@@ -83,7 +83,7 @@
 <div class="inline-flex items-center gap-0.5">
 	<button
 		type="button"
-		class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+		class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
 		aria-label={`Previous ${ariaLabel}`}
 		onclick={() => cycle(-1)}
 	>
@@ -95,7 +95,7 @@
 			bind:this={triggerEl}
 			type="button"
 			{id}
-			class="flex items-center gap-1 rounded-md border border-neutral-300 px-2 py-1 text-sm font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-100 dark:hover:bg-neutral-800"
+			class="flex items-center gap-1 rounded-md border border-neutral-300 px-2 py-1 text-sm font-medium text-neutral-800 hover:bg-neutral-100 dark:border-[var(--border-subtle)] dark:text-neutral-100 dark:hover:bg-[var(--surface-card)]"
 			aria-haspopup="listbox"
 			aria-expanded={open}
 			aria-label={ariaLabel}
@@ -116,7 +116,7 @@
 			<ul
 				role="listbox"
 				aria-label={ariaLabel}
-				class="absolute left-0 top-full z-20 mt-1 max-h-64 min-w-[10rem] overflow-auto rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+				class="absolute left-0 top-full z-20 mt-1 max-h-64 min-w-[10rem] overflow-auto rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
 				onkeydown={handleListKeydown}
 			>
 				{#each options as option, i (option)}
@@ -125,7 +125,7 @@
 						role="option"
 						aria-selected={option === value}
 						tabindex="-1"
-						class="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm text-neutral-700 outline-none hover:bg-purple-50 focus:bg-purple-100 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800"
+						class="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm text-neutral-700 outline-none hover:bg-purple-50 focus:bg-purple-100 dark:text-neutral-200 dark:hover:bg-[var(--surface-card)] dark:focus:bg-neutral-800"
 						onclick={() => {
 							onchange(option);
 							closeDropdown(true);
@@ -149,7 +149,7 @@
 
 	<button
 		type="button"
-		class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+		class="grid h-6 w-6 place-items-center rounded text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-[var(--surface-card)]"
 		aria-label={`Next ${ariaLabel}`}
 		onclick={() => cycle(1)}
 	>

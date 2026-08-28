@@ -108,35 +108,56 @@
 </script>
 
 <aside
-	class="flex h-full flex-col border-r border-neutral-200 bg-neutral-50 transition-[width] duration-150 dark:border-neutral-800 dark:bg-neutral-900"
+	class="flex h-full flex-col border-r border-neutral-200 bg-neutral-50 transition-[width] duration-150 dark:border-[var(--border-subtle)] dark:bg-[var(--surface-sidebar)]"
 	class:w-64={!collapsed}
 	class:w-12={collapsed}
 	aria-label="CV list"
 >
-	<div class="flex items-center justify-between p-2">
-		{#if !collapsed}
-			<span class="px-1 text-sm font-semibold text-neutral-700 dark:text-neutral-200">Your CVs</span>
-		{/if}
-		<button
-			type="button"
-			class="ml-auto grid h-7 w-7 place-items-center rounded-md text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
-			aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-			aria-expanded={!collapsed}
-			onclick={() => (collapsed = !collapsed)}
-		>
-			{collapsed ? '»' : '«'}
-		</button>
+	<!--
+		Brand row: a simple bird-ish mark + wordmark (adapted from the
+		landing page's own mark, `LandingNav.svelte` -- not a copy of the
+		real rendercv.com logo asset). The sidebar's own collapse toggle
+		lives in the editor toolbar now (`EditorPane`'s sidebar-collapse
+		button), so collapsed state just narrows this rail to the mark alone.
+	-->
+	<div class="flex items-center p-2" class:justify-center={collapsed}>
+		<span class="flex items-center gap-2 px-1 text-neutral-800 dark:text-neutral-100">
+			<svg
+				viewBox="0 0 24 24"
+				width="20"
+				height="20"
+				fill="none"
+				aria-hidden="true"
+				class="shrink-0 text-purple-500 dark:text-purple-400"
+			>
+				<path
+					d="M3 13c2-5 6-8 9-8 1 0 1.5.7 1 1.5-.6 1-.2 1.8.8 1.5 2-.6 4 .6 4 2.3 0 1.6-1.7 2.2-3 1.7-1.5-.5-2 .4-1 1.5.9 1 .5 2-.8 2-3 0-6.5-1-8-4"
+					stroke="currentColor"
+					stroke-width="1.6"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+				<circle cx="16.5" cy="7.5" r="0.9" fill="currentColor" />
+			</svg>
+			{#if !collapsed}
+				<span class="text-sm font-semibold tracking-tight">RenderCV</span>
+			{/if}
+		</span>
 	</div>
 
 	{#if !collapsed}
 		<div class="px-2 pb-2">
 			<button
 				type="button"
-				class="w-full rounded-md bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+				class="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
 				onclick={onCreate}
 			>
-				+ Create new CV
+				<span class="text-purple-500 dark:text-purple-400">+</span> Create new CV
 			</button>
+		</div>
+
+		<div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+			CVs
 		</div>
 
 		<nav class="flex-1 overflow-y-auto px-2" aria-label="Saved CVs">
@@ -149,7 +170,7 @@
 								bind:this={renameInputEl}
 								bind:value={renameValue}
 								aria-label={`Rename ${cv.name}`}
-								class="w-full rounded-md border border-purple-400 bg-white px-2 py-1.5 text-sm text-neutral-900 outline-none dark:bg-neutral-800 dark:text-neutral-100"
+								class="w-full rounded-md border border-purple-400 bg-white px-2 py-1.5 text-sm text-neutral-900 outline-none dark:bg-[var(--surface-card)] dark:text-neutral-100"
 								onblur={() => commitRename(cv.id)}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') {
@@ -173,7 +194,7 @@
 									class:text-neutral-700={!active}
 									class:hover:bg-neutral-100={!active}
 									class:dark:text-neutral-200={!active}
-									class:dark:hover:bg-neutral-800={!active}
+									class:dark:hover:bg-[var(--surface-card)]={!active}
 									aria-current={active ? 'true' : undefined}
 									onclick={() => onSwitch(cv.id)}
 								>
@@ -185,7 +206,7 @@
 
 								<button
 									type="button"
-									class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-700"
+									class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)]"
 									aria-label={`More actions for ${cv.name}`}
 									aria-haspopup="menu"
 									aria-expanded={menuOpenId === cv.id}
@@ -206,13 +227,13 @@
 								<ul
 									role="menu"
 									aria-label={`Actions for ${cv.name}`}
-									class="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+									class="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
 								>
 									<li role="none">
 										<button
 											role="menuitem"
 											type="button"
-											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-[var(--surface-card)]"
 											onclick={() => startRename(cv)}
 										>
 											Rename
@@ -222,7 +243,7 @@
 										<button
 											role="menuitem"
 											type="button"
-											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-[var(--surface-card)]"
 											onclick={() => duplicate(cv.id)}
 										>
 											Duplicate
@@ -232,7 +253,7 @@
 										<button
 											role="menuitem"
 											type="button"
-											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+											class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-[var(--surface-card)]"
 											onclick={() => openHistory(cv.id)}
 										>
 											History…
@@ -253,7 +274,7 @@
 
 							{#if historyId === cv.id}
 								<div
-									class="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+									class="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-neutral-200 bg-white p-2 text-sm shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
 								>
 									<div class="mb-1 flex items-center justify-between">
 										<span class="font-medium text-neutral-700 dark:text-neutral-200">History</span>
@@ -276,7 +297,7 @@
 												<li>
 													<button
 														type="button"
-														class="w-full rounded px-2 py-1 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+														class="w-full rounded px-2 py-1 text-left hover:bg-neutral-100 dark:hover:bg-[var(--surface-card)]"
 														onclick={() => restoreVersion(cv.id, version.id)}
 													>
 														{formatRelativeTime(version.createdAt)}
@@ -292,13 +313,13 @@
 								<div
 									role="alertdialog"
 									aria-label={`Delete ${cv.name}?`}
-									class="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+									class="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
 								>
 									<p class="mb-2 text-neutral-700 dark:text-neutral-200">Delete "{cv.name}"? This cannot be undone.</p>
 									<div class="flex justify-end gap-2">
 										<button
 											type="button"
-											class="rounded-md border border-neutral-300 px-2.5 py-1 dark:border-neutral-700"
+											class="rounded-md border border-neutral-300 px-2.5 py-1 dark:border-[var(--border-subtle)]"
 											onclick={cancelDelete}
 										>
 											Cancel
@@ -319,12 +340,29 @@
 			</ul>
 		</nav>
 
-		<div class="border-t border-neutral-200 p-2 dark:border-neutral-800">
+		<div class="flex items-center gap-1 border-t border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 			<a
 				href="/welcome"
-				class="block rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+				class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-200"
 			>
+				<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+					<circle cx="12" cy="12" r="9" />
+					<path d="M12 16v-4.5M12 8.5h.01" stroke-linecap="round" />
+				</svg>
 				About
+			</a>
+			<a
+				href="https://github.com/rendercv/rendercv"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-200"
+			>
+				<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+					<path
+						d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.11-3.2.7-3.87-1.36-3.87-1.36-.52-1.34-1.28-1.69-1.28-1.69-1.04-.72.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.41-5.25 5.69.42.36.78 1.08.78 2.17 0 1.57-.01 2.83-.01 3.22 0 .3.2.66.79.55A10.52 10.52 0 0 0 23.5 12c0-6.35-5.15-11.5-11.5-11.5Z"
+					/>
+				</svg>
+				GitHub
 			</a>
 		</div>
 	{/if}

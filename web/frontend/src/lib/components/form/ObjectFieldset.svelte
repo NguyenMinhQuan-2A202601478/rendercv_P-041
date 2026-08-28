@@ -23,7 +23,7 @@
 	} = $props();
 </script>
 
-<fieldset class="flex flex-col gap-0 rounded-md border border-neutral-200 p-2 dark:border-neutral-700">
+<fieldset class="flex flex-col gap-0 rounded-md border border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 	{#if descriptor.label}
 		<legend class="px-1 text-sm font-medium text-neutral-700 dark:text-neutral-300">
 			{descriptor.label}

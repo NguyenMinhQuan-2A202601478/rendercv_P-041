@@ -104,13 +104,13 @@
 	{:else}
 		<section
 			aria-label="Design theme"
-			class="rounded-md border border-neutral-200 px-3 py-1 dark:border-neutral-700"
+			class="rounded-md border border-neutral-200 px-3 py-1 dark:border-[var(--border-subtle)]"
 		>
 			<div class="flex items-center justify-between py-2 text-sm">
 				<span class="font-medium text-neutral-700 dark:text-neutral-300">Theme</span>
 				<span class="font-medium text-neutral-900 dark:text-neutral-100">{currentTheme}</span>
 			</div>
-			<p class="pb-2 text-xs text-neutral-400 dark:text-neutral-500">
+			<p class="pb-2 text-xs text-neutral-400 dark:text-neutral-400">
 				Use the theme switcher in the tab bar above to change it.
 			</p>
 		</section>

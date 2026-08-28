@@ -1,6 +1,7 @@
 import { writable, type Readable, type Writable } from 'svelte/store';
 import type { CvDocuments } from '$lib/stores/documents';
 import { renderPreview, type RenderResult, type ValidationError } from '$lib/api/render';
+import { isWasmPreviewEnabled } from '$lib/wasm/featureFlag';
 
 export type PreviewStatus = 'idle' | 'pending' | 'success' | 'error';
 
@@ -10,10 +11,39 @@ export interface PreviewState {
 	url: string | null;
 	errors: ValidationError[];
 	hasRenderedOnce: boolean;
+	/** Which path produced the currently-showing (or currently pending) render. */
+	renderedBy: 'server' | 'client';
 }
 
 export interface DocumentSource {
 	subscribe: Readable<CvDocuments>['subscribe'];
+}
+
+/**
+ * The in-browser (Pyodide + typst.ts) render path, injected into the
+ * controller so it stays unit-testable with a fake instead of real wasm.
+ *
+ * Why `isReady()` is synchronous and polled rather than a single startup
+ * Promise: the engine's readiness can change over the page's lifetime (it
+ * starts loading in the background and becomes ready some seconds later,
+ * independent of when any particular render is requested), so the
+ * controller needs to check it fresh on every render, not just once at
+ * construction.
+ */
+export interface ClientRenderEngine {
+	/** True once the engine has finished loading (wheel installed, compiler initialized) and can accept `render()` calls. */
+	isReady(): boolean;
+	/**
+	 * Compiles the four documents to a PDF entirely client-side.
+	 *
+	 * Must reject (not resolve an error result) on any failure -- the
+	 * controller treats a rejection as "fall back to the server for this
+	 * render", matching the plan's "server render stays canonical" rule.
+	 * Client-side validation errors are intentionally not surfaced; the
+	 * server render (or the parallel `/api/validate` debounce) remains the
+	 * source of truth for error content.
+	 */
+	render(docs: CvDocuments): Promise<Blob>;
 }
 
 export interface RenderControllerOptions {
@@ -38,6 +68,23 @@ export interface RenderControllerOptions {
 	 * caller before this option existed).
 	 */
 	startPaused?: boolean;
+	/**
+	 * The optional client-side (wasm) render engine. When provided, and
+	 * `clientRenderEnabled()` reports true, and the engine reports ready,
+	 * debounced renders are attempted client-side first; any failure or
+	 * timeout for that render falls back to `render()` (the server path).
+	 */
+	clientRenderEngine?: ClientRenderEngine;
+	/**
+	 * Reads the feature flag. Defaults to `isWasmPreviewEnabled()`
+	 * (localStorage, off by default). Injectable so tests don't need to
+	 * touch real browser storage.
+	 */
+	clientRenderEnabled?: () => boolean;
+	/** How long a client render is given before it's treated as a failure and the server path is used instead. */
+	clientRenderTimeoutMs?: number;
+	/** Consecutive client-render failures (errors or timeouts) after which the engine is flagged unhealthy and skipped for the rest of this controller's lifetime. */
+	clientRenderMaxConsecutiveFailures?: number;
 }
 
 export interface RenderController {
@@ -51,7 +98,29 @@ export interface RenderController {
 }
 
 function initialState(): PreviewState {
-	return { status: 'idle', url: null, errors: [], hasRenderedOnce: false };
+	return { status: 'idle', url: null, errors: [], hasRenderedOnce: false, renderedBy: 'server' };
+}
+
+/** Rejects with a timeout error if `promise` doesn't settle within `ms`. */
+function withTimeout<T>(
+	promise: Promise<T>,
+	ms: number,
+	setTimeoutFn: typeof setTimeout,
+	clearTimeoutFn: typeof clearTimeout
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeoutFn(() => reject(new Error('client render timed out')), ms);
+		promise.then(
+			(value) => {
+				clearTimeoutFn(timer);
+				resolve(value);
+			},
+			(err) => {
+				clearTimeoutFn(timer);
+				reject(err);
+			}
+		);
+	});
 }
 
 /**
@@ -60,7 +129,7 @@ function initialState(): PreviewState {
  *
  * Why a standalone controller instead of component-local logic: this is the
  * "sync logic" the plan requires be unit-tested without mounting Svelte
- * components or a real backend — every side effect (fetch, timers, blob URL
+ * components or a real backend -- every side effect (fetch, timers, blob URL
  * creation) is injected.
  */
 export function createRenderController(
@@ -74,7 +143,11 @@ export function createRenderController(
 		revokeObjectURL = (url: string) => URL.revokeObjectURL(url),
 		setTimeoutFn = setTimeout,
 		clearTimeoutFn = clearTimeout,
-		startPaused = false
+		startPaused = false,
+		clientRenderEngine,
+		clientRenderEnabled = isWasmPreviewEnabled,
+		clientRenderTimeoutMs = 4000,
+		clientRenderMaxConsecutiveFailures = 3
 	} = options;
 
 	const state = writable<PreviewState>(initialState());
@@ -83,25 +156,75 @@ export function createRenderController(
 	let currentUrl: string | null = null;
 	let renderToken = 0;
 
+	let clientConsecutiveFailures = 0;
+	let clientEngineUnhealthy = false;
+
+	function clientEngineUsable(): boolean {
+		return (
+			!!clientRenderEngine &&
+			!clientEngineUnhealthy &&
+			clientRenderEnabled() &&
+			clientRenderEngine.isReady()
+		);
+	}
+
 	async function runRender(docs: CvDocuments): Promise<void> {
 		const token = ++renderToken;
 		state.update((s) => ({ ...s, status: 'pending' }));
 
-		const result = await render(docs);
-		if (token !== renderToken) return; // a newer render started; drop this one
+		// Why an `if/else` rather than an always-`await`ed helper: when there is
+		// no usable client engine, `clientEngineUsable()` is a synchronous
+		// boolean check, so the server `render(docs)` call below happens in the
+		// same microtask as the debounce firing -- exactly like before this
+		// engine option existed. Routing every render through an intermediate
+		// `async` helper (even one that resolves instantly) would insert an
+		// extra microtask tick before `render(docs)` is invoked, which is
+		// invisible in production but changes the synchronous-call assumption
+		// the "pending status" test above relies on.
+		let usedClient = false;
+		let result: RenderResult;
+		if (clientEngineUsable()) {
+			try {
+				const blob = await withTimeout(
+					clientRenderEngine!.render(docs),
+					clientRenderTimeoutMs,
+					setTimeoutFn,
+					clearTimeoutFn
+				);
+				clientConsecutiveFailures = 0;
+				usedClient = true;
+				result = { ok: true, blob };
+			} catch {
+				clientConsecutiveFailures += 1;
+				if (clientConsecutiveFailures >= clientRenderMaxConsecutiveFailures) {
+					clientEngineUnhealthy = true;
+				}
+				result = await render(docs);
+			}
+		} else {
+			result = await render(docs);
+		}
+		if (token !== renderToken) return; // a newer render started while this one was in flight
 
 		if (result.ok) {
 			const nextUrl = createObjectURL(result.blob);
 			const staleUrl = currentUrl;
 			currentUrl = nextUrl;
-			state.set({ status: 'success', url: nextUrl, errors: [], hasRenderedOnce: true });
+			state.set({
+				status: 'success',
+				url: nextUrl,
+				errors: [],
+				hasRenderedOnce: true,
+				renderedBy: usedClient ? 'client' : 'server'
+			});
 			if (staleUrl) revokeObjectURL(staleUrl);
 		} else {
 			state.update((s) => ({
 				status: 'error',
 				url: s.url,
 				errors: result.errors,
-				hasRenderedOnce: s.hasRenderedOnce
+				hasRenderedOnce: s.hasRenderedOnce,
+				renderedBy: s.renderedBy
 			}));
 		}
 	}

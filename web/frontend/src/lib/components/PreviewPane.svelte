@@ -55,8 +55,9 @@
 </script>
 
 <section
-	class="flex h-full flex-col bg-neutral-50 dark:bg-neutral-950"
+	class="flex h-full flex-col bg-neutral-50 dark:bg-[var(--surface-sidebar)]"
 	aria-label="PDF preview"
+	aria-busy={$previewState.status === 'pending' && !$previewState.hasRenderedOnce}
 >
 	{#if errors.length > 0 && !errorDismissed}
 		<div
@@ -113,8 +114,8 @@
 	<div class="relative flex-1 overflow-auto">
 		{#if $previewState.status === 'pending' && !$previewState.hasRenderedOnce}
 			<div class="absolute inset-0 flex flex-col gap-3 p-6" aria-hidden="true">
-				<div class="h-8 w-2/3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"></div>
-				<div class="h-full w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"></div>
+				<div class="h-8 w-2/3 animate-pulse rounded bg-neutral-200 dark:bg-[var(--surface-card)]"></div>
+				<div class="h-full w-full animate-pulse rounded bg-neutral-200 dark:bg-[var(--surface-card)]"></div>
 			</div>
 			<span class="sr-only" role="status">Rendering preview…</span>
 		{:else if $previewState.url}
@@ -125,7 +126,7 @@
 				></iframe>
 			</div>
 		{:else}
-			<div class="flex h-full items-center justify-center text-sm text-neutral-500">
+			<div class="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
 				Nothing to preview yet.
 			</div>
 		{/if}

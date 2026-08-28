@@ -79,7 +79,7 @@
 	{:else}
 		<section
 			aria-label="CV header fields"
-			class="rounded-md border border-neutral-200 px-3 dark:border-neutral-700"
+			class="rounded-md border border-neutral-200 px-3 dark:border-[var(--border-subtle)]"
 		>
 			{#each headerFields as field (field.key)}
 				<DynamicField

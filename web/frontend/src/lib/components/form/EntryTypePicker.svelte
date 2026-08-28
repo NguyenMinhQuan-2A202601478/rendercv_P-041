@@ -18,7 +18,7 @@
 				type="button"
 				role="radio"
 				aria-checked="false"
-				class="rounded-md border border-neutral-200 p-2 text-left text-sm transition-colors hover:border-purple-400 dark:border-neutral-700 dark:hover:border-purple-500"
+				class="rounded-md border border-neutral-200 p-2 text-left text-sm transition-colors hover:border-purple-400 dark:border-[var(--border-subtle)] dark:hover:border-purple-500"
 				onclick={() => onSelect(d.type)}
 			>
 				<span class="block font-medium text-neutral-800 dark:text-neutral-200">{d.label}</span>

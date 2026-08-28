@@ -3,12 +3,16 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import EditorPane from '$lib/components/EditorPane.svelte';
 	import PreviewPane from '$lib/components/PreviewPane.svelte';
+	import Splitter from '$lib/components/Splitter.svelte';
+	import { splitRatio } from '$lib/stores/splitRatio';
 	import { createRenderController } from '$lib/preview/renderController';
+	import { createWasmRenderEngineIfSupported } from '$lib/wasm/clientRenderEngine';
 	import { createValidateController } from '$lib/preview/validateController';
 	import { documents } from '$lib/stores/documents';
 	import { cvs, activeCv, bootstrapping } from '$lib/stores/cvSession';
 	import { createAutosaveController } from '$lib/persistence/autosave';
 	import { createPreferenceWriter } from '$lib/persistence/preferenceWriter';
+	import { theme } from '$lib/stores/theme';
 	import { bootstrapApp } from '$lib/app/bootstrap';
 	import { createCvSessionActions } from '$lib/app/cvSessionActions';
 	import { listCvs, createCv, getCv } from '$lib/api/cvs';
@@ -31,7 +35,10 @@
 	// under parallel e2e workers into cross-test flakiness once every
 	// `page.goto('/')` started paying for a full bootstrap round trip too
 	// (confirmed by artificially delaying bootstrap -- see the phase notes).
-	const renderController = createRenderController(documents, { startPaused: true });
+	const renderController = createRenderController(documents, {
+		startPaused: true,
+		clientRenderEngine: createWasmRenderEngineIfSupported() ?? undefined
+	});
 	const previewState = renderController.state;
 
 	const validateController = createValidateController(documents, { startPaused: true });
@@ -127,6 +134,8 @@
 				}
 				if (preferences.yaml_mode !== undefined) yamlMode = preferences.yaml_mode !== 'false';
 				if (preferences.sidebar_collapsed !== undefined) sidebarCollapsed = preferences.sidebar_collapsed === 'true';
+				theme.applyPersistedPreference(preferences.ui_theme);
+				splitRatio.applyPersistedPreference(preferences.split_ratio);
 
 				if (preferences.last_cv_id !== String(result.cv.id)) {
 					prefWriter.write('last_cv_id', String(result.cv.id));
@@ -162,6 +171,7 @@
 		validateController.destroy();
 		autosave.destroy();
 		prefWriter.destroy();
+		splitRatio.destroy();
 	});
 </script>
 
@@ -172,7 +182,7 @@
 <svelte:window onbeforeunload={handleBeforeUnload} />
 
 <div
-	class="flex h-screen w-screen overflow-hidden bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
+	class="flex h-screen w-screen overflow-hidden bg-white text-neutral-900 dark:bg-[var(--surface)] dark:text-neutral-100"
 	data-app-ready={bootstrapReady && !bootstrapError ? 'true' : 'false'}
 >
 	{#if $bootstrapping}
@@ -196,19 +206,21 @@
 			onRestore={handleRestore}
 		/>
 		<main class="flex flex-1 overflow-hidden">
-			<div class="w-1/2 min-w-0 border-r border-neutral-200 dark:border-neutral-800">
+			<div class="min-w-0 shrink-0" style={`flex-basis: ${$splitRatio}%`}>
 				<EditorPane
 					bind:this={editorPane}
 					{previewState}
 					{errors}
 					bind:zoom
 					bind:yamlMode
+					bind:sidebarCollapsed
 					{autosaveState}
 					onResolveConflict={handleResolveConflict}
 					onRetrySave={handleRetrySave}
 				/>
 			</div>
-			<div class="w-1/2 min-w-0">
+			<Splitter ratio={$splitRatio} onChange={(next) => splitRatio.set(next)} />
+			<div class="min-w-0 flex-1">
 				<PreviewPane {previewState} {errors} {zoom} onErrorClick={handleErrorClick} />
 			</div>
 		</main>

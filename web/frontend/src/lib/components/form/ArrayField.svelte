@@ -79,10 +79,10 @@
 	let dragIndex = $state<number | null>(null);
 
 	const buttonClass =
-		'grid h-6 w-6 place-items-center rounded text-neutral-500 hover:bg-neutral-100 disabled:opacity-30 dark:text-neutral-400 dark:hover:bg-neutral-800';
+		'grid h-6 w-6 place-items-center rounded text-neutral-500 hover:bg-neutral-100 disabled:opacity-30 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)]';
 </script>
 
-<div class="flex flex-col gap-2 border-b border-neutral-100 py-2 last:border-b-0 dark:border-neutral-800">
+<div class="flex flex-col gap-2 border-b border-neutral-100 py-2 last:border-b-0 dark:border-[var(--border-subtle)]">
 	<div class="flex items-center justify-between">
 		<span class="flex items-center gap-1">
 			<span
@@ -91,7 +91,7 @@
 				class:dark:text-neutral-300={isOverridden}
 				class:italic={!isOverridden}
 				class:text-neutral-400={!isOverridden}
-				class:dark:text-neutral-500={!isOverridden}
+				class:dark:text-neutral-400={!isOverridden}
 			>
 				{descriptor.label}
 			</span>
@@ -117,13 +117,13 @@
 	</div>
 
 	{#if values.length === 0}
-		<p class="text-xs text-neutral-400 dark:text-neutral-500">None yet.</p>
+		<p class="text-xs text-neutral-400 dark:text-neutral-400">None yet.</p>
 	{/if}
 
 	<ul class="flex flex-col gap-2">
 		{#each values as item, i (i)}
 			<li
-				class="flex items-start gap-2 rounded-md border border-neutral-200 p-2 dark:border-neutral-700"
+				class="flex items-start gap-2 rounded-md border border-neutral-200 p-2 dark:border-[var(--border-subtle)]"
 				draggable="true"
 				ondragstart={() => (dragIndex = i)}
 				ondragover={(e) => e.preventDefault()}

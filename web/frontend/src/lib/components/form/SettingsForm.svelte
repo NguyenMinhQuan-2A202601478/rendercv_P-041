@@ -76,7 +76,7 @@
 	{:else}
 		<section
 			aria-label="Settings fields"
-			class="rounded-md border border-neutral-200 px-3 dark:border-neutral-700"
+			class="rounded-md border border-neutral-200 px-3 dark:border-[var(--border-subtle)]"
 		>
 			{#each fields as field (field.key)}
 				<DynamicField

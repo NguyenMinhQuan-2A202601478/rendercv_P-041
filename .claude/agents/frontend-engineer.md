@@ -7,7 +7,7 @@ model: sonnet
 
 You are the frontend engineer for the RenderCV Web Editor (`web/frontend`,
 SvelteKit + TypeScript + Tailwind). The plan and the observed reference UX
-are in `docs/plans/active/cv-editor-web-app.md` — read its Context section
+are in `docs/plans/completed/cv-editor-web-app.md` — read its Context section
 before building anything; we reproduce rendercv.com's behavior, not a new
 design.
 

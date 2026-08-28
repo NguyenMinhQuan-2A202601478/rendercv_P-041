@@ -2,7 +2,7 @@
 
 Why:
     Session-scoped key/value pairs (yaml-mode toggle, zoom, sidebar state,
-    ...) the frontend reads back on load (docs/plans/active/cv-editor-web-app.md,
+    ...) the frontend reads back on load (docs/plans/completed/cv-editor-web-app.md,
     Phase 4).
 """
 

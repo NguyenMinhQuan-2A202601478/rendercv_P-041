@@ -30,7 +30,7 @@ export async function firstPreviewUrl(page: Page): Promise<string> {
  * (see `+page.svelte`), so nothing renders at all until bootstrap is done --
  * but relying on that as an implicit readiness signal is exactly the kind
  * of coupling that caused cross-test e2e flakiness once bootstrap became
- * async (docs/plans/active/cv-editor-web-app.md, Phase 4c follow-up): it's
+ * async (docs/plans/completed/cv-editor-web-app.md, Phase 4c follow-up): it's
  * indirect, and a future change to the render pipeline could silently
  * reintroduce a race. `+page.svelte` sets `data-app-ready="true"` on its
  * root element as an explicit, single-purpose signal for exactly this --

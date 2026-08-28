@@ -3,4 +3,4 @@
 FastAPI backend for the RenderCV Web Editor. Wraps the `rendercv` core
 (imported as an editable path dependency) as a small HTTP service:
 validation, PDF rendering, JSON schema, and theme defaults. See
-`docs/plans/active/cv-editor-web-app.md` for the overall plan.
+`docs/plans/completed/cv-editor-web-app.md` for the overall plan.

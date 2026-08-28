@@ -10,7 +10,7 @@ description: Update project documentation after a feature or decision — plan p
 | Content | Location | Template |
 |---|---|---|
 | Lasting product/architecture decision | `docs/decisions/` | `docs/templates/decision.md` |
-| Progress, task-local decisions | `docs/plans/active/cv-editor-web-app.md` | (same file — no parallel logs) |
+| Progress, task-local decisions | `docs/plans/completed/cv-editor-web-app.md` | (same file — no parallel logs) |
 | API contract | `web/backend/README.md` | method, path, request/response, errors |
 | How to run/deploy the app | runbook per `docs/templates/application-runbook.md` | |
 | User-facing docs | mkdocs tree under `docs/` | must pass `just build-docs` |

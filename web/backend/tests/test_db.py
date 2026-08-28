@@ -2,7 +2,7 @@
 initial alembic migration's upgrade/downgrade round trip.
 
 Why:
-    Phase 4a (docs/plans/active/cv-editor-web-app.md) delivers the schema
+    Phase 4a (docs/plans/completed/cv-editor-web-app.md) delivers the schema
     before any endpoint uses it; these tests are the proof the schema and
     its concurrency guarantees hold, independent of Phase 4b's API layer.
     Every test runs against a throwaway SQLite file under `tmp_path` --

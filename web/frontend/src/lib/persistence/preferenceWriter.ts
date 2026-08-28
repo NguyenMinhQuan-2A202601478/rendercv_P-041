@@ -19,7 +19,7 @@ export interface PreferenceWriter {
  * A generic debounced writer for `PUT /api/preferences`, one independent
  * debounce timer per key -- so writing `zoom` rapidly doesn't delay a
  * `sidebar_collapsed` write already in flight, and vice versa
- * (docs/plans/active/cv-editor-web-app.md, Phase 4c: "persist last_cv_id,
+ * (docs/plans/completed/cv-editor-web-app.md, Phase 4c: "persist last_cv_id,
  * sidebar_collapsed, yaml_mode, zoom via the API (debounce writes; read
  * once at bootstrap)").
  */

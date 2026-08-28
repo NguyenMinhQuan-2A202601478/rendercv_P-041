@@ -2,7 +2,7 @@
 	/**
 	 * `/welcome` — the static landing page (Phase 5c). Reproduces the
 	 * structure the plan documents from the observed rendercv.com landing
-	 * page (docs/plans/active/cv-editor-web-app.md, Context, "Landing page"),
+	 * page (docs/plans/completed/cv-editor-web-app.md, Context, "Landing page"),
 	 * adapted for a self-hosted clone: honest copy, no fake testimonials, no
 	 * star counts, no payment CTA.
 	 *

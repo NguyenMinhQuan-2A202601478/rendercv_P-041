@@ -1,7 +1,7 @@
 """Multi-CV persistence: `/api/cvs` and its version-history sub-resource.
 
 Why:
-    Phase 4b (docs/plans/active/cv-editor-web-app.md): the sidebar's list of
+    Phase 4b (docs/plans/completed/cv-editor-web-app.md): the sidebar's list of
     saved CVs, the autosave write, and undo history, all scoped to the
     anonymous session identified by `auth.CurrentUser`. Every read and
     write is scoped to `current_user.id`; a CV id that exists but belongs to
@@ -365,7 +365,7 @@ def restore_version(
         Applied as a normal conditional update (not an in-place rewrite) so
         it bumps `updated_at`, records its own new version, and can lose an
         optimistic-concurrency race exactly like any other autosave would
-        (docs/plans/active/cv-editor-web-app.md, Phase 4).
+        (docs/plans/completed/cv-editor-web-app.md, Phase 4).
 
     Args:
         cv_id: The CV to restore a version onto.

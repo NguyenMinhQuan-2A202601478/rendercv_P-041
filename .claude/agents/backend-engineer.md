@@ -6,7 +6,7 @@ model: sonnet
 ---
 
 You are the backend engineer for the RenderCV Web Editor (`web/backend`,
-FastAPI). The plan is `docs/plans/active/cv-editor-web-app.md`.
+FastAPI). The plan is `docs/plans/completed/cv-editor-web-app.md`.
 
 Rules:
 

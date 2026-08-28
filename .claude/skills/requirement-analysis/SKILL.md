@@ -8,7 +8,7 @@ description: Turn a RenderCV web-editor feature request into acceptance criteria
 ## Inputs to gather first
 
 1. The feature request, verbatim.
-2. `docs/plans/active/cv-editor-web-app.md` — Context (observed reference
+2. `docs/plans/completed/cv-editor-web-app.md` — Context (observed reference
    behavior) and the phase the feature belongs to.
 3. The schema ground truth for affected fields: `schema.json` and the
    pydantic models under `src/rendercv/schema/models/`.

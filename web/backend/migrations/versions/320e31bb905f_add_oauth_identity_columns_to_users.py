@@ -1,7 +1,7 @@
 """add oauth identity columns to users
 
 Why:
-    Phase 6 of the web editor plan (docs/plans/active/cv-editor-web-app.md):
+    Phase 6 of the web editor plan (docs/plans/completed/cv-editor-web-app.md):
     Google sign-in. The baseline `users` row is an anonymous device session
     keyed by `session_token`; these four nullable columns let that same row
     also carry an account identity, which is what allows an anonymous

@@ -56,7 +56,7 @@ function toSummary(cv: CvDetail): CvSummary {
 /**
  * Orchestrates the sidebar's CV list against the shared `documents` /
  * `activeCv` / `cvs` stores and the autosave controller
- * (docs/plans/active/cv-editor-web-app.md, Phase 4c). A standalone factory
+ * (docs/plans/completed/cv-editor-web-app.md, Phase 4c). A standalone factory
  * (same reasoning as every other controller in this codebase) so switch/
  * create/rename/duplicate/delete/restore semantics are unit-testable with
  * injected stores and a fake API -- see `cvSessionActions.test.ts`.

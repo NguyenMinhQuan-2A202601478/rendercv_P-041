@@ -1,7 +1,7 @@
 """Programmatic alembic upgrade so the app never needs a manual CLI step.
 
 Why:
-    Phase 4b (docs/plans/active/cv-editor-web-app.md): `uvicorn` must be able
+    Phase 4b (docs/plans/completed/cv-editor-web-app.md): `uvicorn` must be able
     to start against a brand-new or behind-head database with zero manual
     setup. `upgrade_to_head` runs exactly what `alembic upgrade head` would
     run on the command line (same `Config`, same script location), so it is
@@ -44,7 +44,7 @@ def upgrade_to_head(database_url: str | None = None) -> None:
         Safe to call on every process startup: alembic no-ops when the
         database is already at `head`, and builds the schema from scratch
         when the database is missing -- the dev-DB creation path approved
-        in the plan (docs/plans/active/cv-editor-web-app.md, Phase 4).
+        in the plan (docs/plans/completed/cv-editor-web-app.md, Phase 4).
 
     Args:
         database_url: The database URL to upgrade; defaults to

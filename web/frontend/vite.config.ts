@@ -27,6 +27,16 @@ export default defineConfig({
 			}
 		}
 	},
+	optimizeDeps: {
+		// Pre-bundle the client-side preview engine's compiler dependency at
+		// server start. It is only ever imported by `engine.worker.ts`, which
+		// nothing instantiates until the wasm preview flag is on -- so without
+		// this Vite first discovers it whenever the worker is finally
+		// constructed and forces a full page reload right then, destroying the
+		// page's execution context mid-run (which is exactly what e2e/wasm.spec.ts
+		// does). Listing it here makes dev startup deterministic instead.
+		include: ['@myriaddreamin/typst.ts', '@myriaddreamin/typst.ts/compiler']
+	},
 	worker: {
 		// The client-side (wasm) preview engine's worker
 		// (src/lib/wasm/engine.worker.ts) is constructed with `{ type:

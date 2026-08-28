@@ -7,6 +7,7 @@
 	import { splitRatio } from '$lib/stores/splitRatio';
 	import { createRenderController } from '$lib/preview/renderController';
 	import { createWasmRenderEngineIfSupported } from '$lib/wasm/clientRenderEngine';
+	import { isWasmPreviewEnabled } from '$lib/wasm/featureFlag';
 	import { createValidateController } from '$lib/preview/validateController';
 	import { documents } from '$lib/stores/documents';
 	import { cvs, activeCv, bootstrapping } from '$lib/stores/cvSession';
@@ -35,9 +36,20 @@
 	// under parallel e2e workers into cross-test flakiness once every
 	// `page.goto('/')` started paying for a full bootstrap round trip too
 	// (confirmed by artificially delaying bootstrap -- see the phase notes).
+	// Gated on the flag at *creation*, not just at selection: the engine's
+	// constructor immediately boots its worker, which downloads Pyodide from
+	// the CDN plus the rendercv wheel, the fonts and the typst compiler wasm
+	// (tens of MB) before anything asks it to render. Constructing it
+	// unconditionally would bill every visitor for a cold start whose result
+	// `clientEngineUsable()` can never select while the flag is off -- the
+	// opposite of this feature's "never costs anyone who hasn't opted in"
+	// contract. Flipping the flag therefore takes effect on the next load,
+	// which is how it is already documented and driven.
+	const clientRenderEngine = isWasmPreviewEnabled() ? createWasmRenderEngineIfSupported() : null;
+
 	const renderController = createRenderController(documents, {
 		startPaused: true,
-		clientRenderEngine: createWasmRenderEngineIfSupported() ?? undefined
+		clientRenderEngine: clientRenderEngine ?? undefined
 	});
 	const previewState = renderController.state;
 
@@ -167,6 +179,11 @@
 	});
 
 	onDestroy(() => {
+		// Owned here (created above), so it must be torn down here: nothing else
+		// terminates the worker, and its Pyodide heap would outlive every
+		// unmount -- SPA navigation away and back, or an HMR remount, would
+		// leave a stack of live workers behind.
+		clientRenderEngine?.dispose();
 		renderController.destroy();
 		validateController.destroy();
 		autosave.destroy();

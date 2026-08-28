@@ -28,6 +28,7 @@ from .defaults import (
 from .errors import CvConflictError
 from .limits import enforce_documents_size_cap
 from .models import (
+    MAX_CV_NAME_LENGTH,
     CvConflictCurrent,
     CvCreateRequest,
     CvDetail,
@@ -289,7 +290,7 @@ def duplicate_cv(
     copy = repository.create_cv(
         session,
         current_user.id,
-        name=f"Copy of {source.name}",
+        name=f"Copy of {source.name}"[:MAX_CV_NAME_LENGTH],
         cv_yaml=source.cv_yaml,
         design_yaml=source.design_yaml,
         locale_yaml=source.locale_yaml,

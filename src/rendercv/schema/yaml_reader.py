@@ -4,7 +4,7 @@ import ruamel.yaml
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scanner import RoundTripScanner
 
-from rendercv.exception import RenderCVInternalError, RenderCVUserError
+from rendercv.exception import RenderCVUserError
 
 
 def read_yaml(file_path_or_contents: pathlib.Path | str) -> CommentedMap:
@@ -55,13 +55,17 @@ def read_yaml(file_path_or_contents: pathlib.Path | str) -> CommentedMap:
         message = "The input file is empty!"
         raise RenderCVUserError(message)
 
-    if isinstance(yaml_as_dictionary, str):
+    if not isinstance(yaml_as_dictionary, CommentedMap):
         message = (
-            "You probably meant to pass a path to the YAML file, but you passed as a"
-            " string and RenderCV interpreted it as the contents of the YAML file."
-            f" Pass the path using `pathlib.Path({file_path_or_contents})`."
+            "The input must be a YAML mapping of `key: value` pairs (e.g. starting"
+            " with `cv:`), not a single value or a list."
         )
-        raise RenderCVInternalError(message)
+        if isinstance(yaml_as_dictionary, str):
+            message += (
+                " If you meant to pass a file path, pass it as a `pathlib.Path`"
+                " instead of a string."
+            )
+        raise RenderCVUserError(message)
 
     return yaml_as_dictionary
 

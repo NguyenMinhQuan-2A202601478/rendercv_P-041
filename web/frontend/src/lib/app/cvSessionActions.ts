@@ -135,6 +135,9 @@ export function createCvSessionActions(
 
 	async function remove(id: number): Promise<void> {
 		const wasActive = get(stores.activeCv)?.id === id;
+		// Same race as `restore`: settle the open CV's pending save before the
+		// row disappears, so no write is left on the wire against a deleted CV.
+		if (wasActive) await autosave.flush();
 		const ok = await deleteCv(id);
 		if (!ok) return;
 		stores.cvs.update((list) => list.filter((cv) => cv.id !== id));
@@ -155,6 +158,11 @@ export function createCvSessionActions(
 	}
 
 	async function restore(id: number, versionId: number): Promise<void> {
+		// A pending or in-flight save carries the pre-restore `seenUpdatedAt`:
+		// landing after the restore it 409s (a conflict bar right after a
+		// successful restore), landing before it silently reverts the version
+		// the user just restored. Settle it first, as `switchTo` does.
+		if (get(stores.activeCv)?.id === id) await autosave.flush();
 		const result = await restoreVersion(id, versionId);
 		if (!result.ok) return; // conflict/not-found: left for the user to retry
 		const full = await getCv(id);

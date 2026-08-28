@@ -11,6 +11,16 @@ from typing import Annotated, Any, Literal
 import pydantic
 
 MAX_DOCUMENT_BYTES = 512 * 1024
+# Mirrors the `cvs.name` / `preferences.key` column widths in `db/models.py`:
+# SQLite ignores VARCHAR lengths but PostgreSQL (the deploy target) raises
+# `DataError` on overflow, which the error boundary can only turn into an
+# opaque 500 -- so the cap is enforced here, as a 422, before the write.
+MAX_CV_NAME_LENGTH = 255
+MAX_PREFERENCE_KEY_LENGTH = 128
+# `preferences.value` is an unbounded TEXT column, but every value the editor
+# stores is small UI state (zoom, theme, split ratio); cap it so a request
+# body cannot grow the table without limit.
+MAX_PREFERENCE_VALUE_LENGTH = 4096
 
 
 class CvDocumentsRequest(pydantic.BaseModel):
@@ -242,6 +252,7 @@ class CvCreateRequest(pydantic.BaseModel):
 
     name: str | None = pydantic.Field(
         default=None,
+        max_length=MAX_CV_NAME_LENGTH,
         description="Display name for the new CV; defaults to `Untitled CV`.",
     )
 
@@ -257,7 +268,7 @@ class CvUpdateRequest(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(extra="forbid")
 
-    name: str
+    name: str = pydantic.Field(max_length=MAX_CV_NAME_LENGTH)
     documents: CvDocumentsPayload
     seen_updated_at: datetime
 
@@ -298,5 +309,5 @@ class PreferenceUpdateRequest(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(extra="forbid")
 
-    key: str
-    value: str
+    key: str = pydantic.Field(max_length=MAX_PREFERENCE_KEY_LENGTH)
+    value: str = pydantic.Field(max_length=MAX_PREFERENCE_VALUE_LENGTH)

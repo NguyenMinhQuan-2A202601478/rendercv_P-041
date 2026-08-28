@@ -330,4 +330,133 @@ describe('createAutosaveController', () => {
 		);
 		controller.destroy();
 	});
+
+	it('never puts two saves on the wire at once when flush races a queued follow-up save', async () => {
+		// Regression: `flush()` awaited only the save that was on the wire when
+		// it was called. That save's success handler starts the queued
+		// follow-up, so flush then started a *second* save alongside it -- both
+		// carrying the same `seenUpdatedAt`, so the loser 409s and the user sees
+		// a conflict bar against their own edit.
+		const documentsSource = writable<CvDocuments>(docs());
+		const metaSource = writable<ActiveCvMeta | null>(meta());
+
+		let inFlightCount = 0;
+		let maxConcurrent = 0;
+		const gates: Array<() => void> = [];
+		const updateCv = vi.fn(async (): Promise<UpdateCvResult> => {
+			inFlightCount += 1;
+			maxConcurrent = Math.max(maxConcurrent, inFlightCount);
+			await new Promise<void>((resolve) => gates.push(resolve));
+			inFlightCount -= 1;
+			return { ok: true, updatedAt: `t${updateCv.mock.calls.length}` };
+		});
+		const settle = async (): Promise<void> => {
+			for (let i = 0; i < 20; i += 1) await Promise.resolve();
+		};
+
+		const controller = createAutosaveController(documentsSource, metaSource, {
+			debounceMs: 1500,
+			updateCv
+		});
+		controller.setBaseline({ id: 1, name: 'Untitled CV', documents: docs(), updatedAt: 't0' });
+
+		documentsSource.set(docs('cv: {name: A}'));
+		vi.advanceTimersByTime(1500); // save A starts and stays in flight (gated)
+		documentsSource.set(docs('cv: {name: AB}'));
+		vi.advanceTimersByTime(1500); // triggers while in flight -> queues the follow-up
+
+		const flushed = controller.flush();
+		gates.shift()?.(); // let save A land: its handler starts the queued save
+		await settle();
+
+		// The queued save is now on the wire. Before the fix, flush resumed here
+		// and started a second one alongside it.
+		expect(maxConcurrent).toBe(1);
+
+		// Drain whatever is still gated so `flush()` can resolve.
+		for (let i = 0; i < 5 && (gates.length > 0 || inFlightCount > 0); i += 1) {
+			gates.shift()?.();
+			await settle();
+		}
+		await flushed;
+		expect(get(controller.state).status).toBe('saved');
+		controller.destroy();
+	});
+
+	
+	it('drops a save result that lands after the baseline moved to another CV', async () => {
+		// Regression: the success handler reinstalled its own snapshot as the
+		// baseline unconditionally. A save for CV 1 resolving after the app had
+		// loaded CV 2 reset the baseline back to CV 1, and `isDirty()`'s id
+		// check then reported every later edit as clean -- autosave silently
+		// dead until reload.
+		const documentsSource = writable<CvDocuments>(docs());
+		const metaSource = writable<ActiveCvMeta | null>(meta());
+
+		let release!: () => void;
+		const savedCvIds: number[] = [];
+		const updateCv = vi.fn(async (id: number): Promise<UpdateCvResult> => {
+			savedCvIds.push(id);
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return { ok: true, updatedAt: 't1' };
+		});
+
+		const controller = createAutosaveController(documentsSource, metaSource, {
+			debounceMs: 1500,
+			updateCv
+		});
+		controller.setBaseline({ id: 1, name: 'Untitled CV', documents: docs(), updatedAt: 't0' });
+
+		documentsSource.set(docs('cv: {name: A}'));
+		vi.advanceTimersByTime(1500);
+		await vi.waitFor(() => expect(updateCv).toHaveBeenCalledTimes(1));
+
+		// CV 2 is loaded while CV 1's save is still on the wire.
+		metaSource.set({ id: 2, name: 'Second CV' });
+		documentsSource.set(docs('cv: {name: second}'));
+		controller.setBaseline({
+			id: 2,
+			name: 'Second CV',
+			documents: docs('cv: {name: second}'),
+			updatedAt: 's0'
+		});
+
+		release();
+		await vi.waitFor(() => expect(updateCv).toHaveBeenCalledTimes(1));
+
+		// Editing CV 2 must still autosave: the stale result must not have
+		// restored CV 1's baseline.
+		documentsSource.set(docs('cv: {name: second edited}'));
+		vi.advanceTimersByTime(1500);
+		await vi.waitFor(() => expect(updateCv).toHaveBeenCalledTimes(2));
+		expect(savedCvIds).toEqual([1, 2]);
+		controller.destroy();
+	});
+
+	it('surfaces a too-large save as a permanent error instead of retrying it', async () => {
+		// Regression: 413/404 are deterministic, but they fell into the generic
+		// retry path -- the identical oversized payload was resent and the user
+		// only ever saw "Save failed" with a Retry that could not succeed.
+		const documentsSource = writable<CvDocuments>(docs());
+		const metaSource = writable<ActiveCvMeta | null>(meta());
+		const updateCv = vi.fn(async (): Promise<UpdateCvResult> => ({ ok: false, kind: 'too-large' }));
+		const controller = createAutosaveController(documentsSource, metaSource, {
+			debounceMs: 1500,
+			retryDelayMs: 3000,
+			updateCv
+		});
+		controller.setBaseline({ id: 1, name: 'Untitled CV', documents: docs(), updatedAt: 't0' });
+
+		documentsSource.set(docs('cv: {name: A}'));
+		vi.advanceTimersByTime(1500);
+		await vi.waitFor(() => expect(get(controller.state).status).toBe('error'));
+
+		expect(get(controller.state).permanentError).toMatch(/too large/i);
+
+		vi.advanceTimersByTime(10000); // no retry is ever scheduled
+		expect(updateCv).toHaveBeenCalledTimes(1);
+		controller.destroy();
+	});
 });

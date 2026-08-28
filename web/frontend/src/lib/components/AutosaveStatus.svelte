@@ -21,8 +21,8 @@
 		class:bg-red-500={$state.status === 'error' || $state.status === 'conflict'}
 		aria-hidden="true"
 	></span>
-	<span>{LABELS[$state.status]}</span>
-	{#if $state.status === 'error' && onRetry}
+	<span>{$state.permanentError ?? LABELS[$state.status]}</span>
+	{#if $state.status === 'error' && !$state.permanentError && onRetry}
 		<button
 			type="button"
 			class="ml-1 rounded border border-neutral-300 px-1.5 py-0.5 text-xs font-medium hover:bg-neutral-100 dark:border-[var(--border-subtle)] dark:hover:bg-[var(--surface-card)]"

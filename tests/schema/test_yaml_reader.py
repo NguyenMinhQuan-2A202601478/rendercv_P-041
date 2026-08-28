@@ -4,7 +4,7 @@ import pathlib
 import pytest
 from ruamel.yaml.comments import CommentedMap
 
-from rendercv.exception import RenderCVInternalError, RenderCVUserError
+from rendercv.exception import RenderCVUserError
 from rendercv.schema.yaml_reader import read_yaml
 
 
@@ -28,8 +28,16 @@ class TestReadYaml:
             read_yaml(invalid_file_path)
 
     def test_plain_string_path_raises_error(self):
-        with pytest.raises(RenderCVInternalError):
+        # A bare path-looking string parses to a YAML scalar, not a mapping.
+        # It is a user-facing input error (the web editor sends raw editor
+        # text on every keystroke), not an internal one: RenderCVUserError is
+        # what the API's error boundary turns into a 422 rather than a 500.
+        with pytest.raises(RenderCVUserError, match="mapping"):
             read_yaml("plain_string.yaml")
+
+    def test_non_mapping_document_raises_user_error(self):
+        with pytest.raises(RenderCVUserError, match="mapping"):
+            read_yaml("[a, b]")
 
     def test_empty_file_raises_error(self, tmp_path: pathlib.Path):
         empty_file_path = tmp_path / "empty.yaml"

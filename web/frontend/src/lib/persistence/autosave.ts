@@ -9,6 +9,12 @@ export interface AutosaveState {
 	status: AutosaveStatus;
 	/** Set only while `status === 'conflict'`: the server's current state, for the reconciliation bar. */
 	conflict: { updatedAt: string; documents: CvDocuments } | null;
+	/**
+	 * Set only while `status === 'error'` for a failure that retrying cannot
+	 * fix (the document is too large, or the CV no longer exists), so the UI
+	 * can say what went wrong instead of offering a Retry that must fail.
+	 */
+	permanentError?: string;
 }
 
 export interface AutosaveBaseline {
@@ -156,6 +162,23 @@ export function createAutosaveController(
 
 		inFlight = false;
 
+		// The active CV may have changed while this save was on the wire (switch,
+		// delete, restore). This result belongs to the previous CV: reinstalling
+		// its snapshot would clobber the new baseline -- permanently wedging
+		// `isDirty()`'s id check, so every later edit looks clean and is never
+		// saved -- and a conflict/error would be surfaced against a CV the user
+		// has already left.
+		if (baseline?.id !== cvId) {
+			// A trailing edit queued while this stale save was on the wire belongs
+			// to the CV that is open *now*, so run it rather than dropping it --
+			// the queue is the only thing keeping that edit scheduled.
+			if (queued) {
+				queued = false;
+				if (isDirty()) void runSave();
+			}
+			return;
+		}
+
 		if (result.ok) {
 			baseline = { id: cvId, name: nameSnapshot, documents: docsSnapshot, updatedAt: result.updatedAt };
 			retriedOnce = false;
@@ -169,6 +192,20 @@ export function createAutosaveController(
 
 		if (result.kind === 'conflict') {
 			state.set({ status: 'conflict', conflict: result.current });
+			return;
+		}
+
+		// 413 and 404 are deterministic: the identical payload will fail the same
+		// way forever, so retrying only hides the cause behind a generic banner.
+		if (result.kind === 'too-large' || result.kind === 'not-found') {
+			state.set({
+				status: 'error',
+				conflict: null,
+				permanentError:
+					result.kind === 'too-large'
+						? 'This CV is too large to save. Shorten it and your changes will save again.'
+						: 'This CV no longer exists — it may have been deleted in another tab.'
+			});
 			return;
 		}
 
@@ -208,8 +245,13 @@ export function createAutosaveController(
 			clearTimeoutFn(retryTimer);
 			retryTimer = null;
 		}
-		if (currentSavePromise) await currentSavePromise;
-		if (isDirty()) {
+		// Awaiting a single save is not enough: its success handler starts the
+		// queued follow-up save before this resumes, so wait until nothing is on
+		// the wire. Starting one while `inFlight` would put two writes carrying
+		// the same `seenUpdatedAt` in flight, and the loser would 409 -- showing
+		// the user a conflict bar against their own save.
+		while (currentSavePromise) await currentSavePromise;
+		if (!inFlight && isDirty()) {
 			await runSave();
 		}
 	}

@@ -4,7 +4,7 @@ Date: 2026-08-26
 
 ## Status
 
-Active
+Complete
 
 ## Outcome
 
@@ -190,8 +190,40 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   ordering. Final gates (waves 2+3 together): svelte-check 0 errors
   (360 files), Vitest 288/288, Playwright 28/28 (incl. wasm +
   darkmode + splitter specs), backend 75/75, core 1538 passed.
-  Waves 2+3 are code-complete on disk, awaiting user approval to
-  commit as the roadmap-closing commit.
+  Committed as f638803; merged to develop in PR #1 together with
+  phases 0-4.
+- [x] Phase 6: landing-first routing, Google sign-in, deployable backend.
+  Merged 2026-08-28 in PR #2 (dd8250e). Wave 1: landing moves to `/`,
+  editor to `/app`, `/welcome` kept as a 308 redirect so shared links
+  survive; `gotoReady`'s default path updated all 23 e2e call sites at
+  once. Wave 2: OAuth 2.0 authorization-code flow on the identity seam
+  Phase 4 left in `db.models.User` -- signing in swaps the existing
+  signed session cookie to a row that now carries an account, so
+  `get_current_user` is untouched. Anonymous work is never lost: first
+  sign-in promotes the caller's own row in place (nothing is copied, so
+  nothing can be half-moved); a second browser's anonymous CVs are moved
+  into the existing account and the empty row retired. Wave 3: sign-in
+  UI that renders only when the server reports `provider_available`, so
+  a deployment without credentials shows no dead controls. Wave 4:
+  planned as documentation, but writing it surfaced two defects that
+  would have made the documentation false -- no Postgres driver was
+  installed, and both URL forms providers hand out (`postgres://`,
+  `postgresql://`) failed even with one; CORS origins were hardcoded to
+  the dev server, so any deployment serving the frontend from another
+  host would load and then silently fail to sign in or save.
+
+  Review (`/code-review PR 2`) then found five session-lifecycle
+  defects, fixed in e063e3b. The serious one: the callback assumed the
+  caller was always anonymous, so signing in with a second Google
+  account from an already-signed-in browser destroyed the first account
+  -- either rewriting its identity or deleting its row and handing its
+  CVs to the newcomer. Reproduced by execution both ways. `/google/start`
+  sets `prompt=select_account`, which exists precisely to invite that.
+  Also fixed: session tokens now rotate when the privilege level changes
+  (fixation) and on sign-out (revocation); `GET /api/auth/me` no longer
+  creates a row, which the landing page was doing for every crawler.
+  Final gates: core 1540, backend 104/104, svelte-check 0 errors (366
+  files), Vitest 295/295, Playwright 35/35, just check clean.
 
 ## Decisions
 
@@ -204,6 +236,25 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
   WASM-only; we keep the server path as the canonical renderer.
 - 2026-08-26: Form editor must be generated from `schema.json` — hand-coding
   fields would drift from the pydantic models the moment the core changes.
+- 2026-08-28: Signing in reuses the anonymous `session_token` cookie rather
+  than adding a second identity mechanism. That is what lets an anonymous
+  session be claimed without moving data, and it keeps one code path for
+  "who is this request".
+- 2026-08-28: Anonymous CVs merge into the account automatically on first
+  sign-in, rather than prompting. Losing a user's work is the worse
+  failure; the cost is that an untouched placeholder CV can come along.
+- 2026-08-28: `id_token` is never parsed. The access token is exchanged
+  server-to-server over TLS and spent on Google's userinfo endpoint, which
+  avoids shipping a JWT verification path and its key rotation.
+- 2026-08-28: One account has one `session_token`, so signing out signs out
+  every device. Of the two available behaviours that is the safe one: an
+  unexpected sign-out costs a click, an unrevoked session costs the
+  account. Per-device sessions need a `sessions` table — recorded, not
+  built.
+- 2026-08-28: Postgres is an optional extra (`uv sync --extra postgres`),
+  not a plain dependency: development and the whole test suite run on
+  SQLite and need no driver. Provider URLs are normalized in code so a
+  pasted connection string works.
 
 ## Validation
 
@@ -218,4 +269,28 @@ All work on branch `quan`, PRs into `develop`, guardrails hook enforced.
 
 ## Result
 
-(Complete after implementation.)
+Delivered and merged to `develop`: PR #1 (phases 0-5, the build roadmap)
+and PR #2 (phase 6). The app reproduces the rendercv.com editing
+experience on this repository's own Python core — landing page,
+three-pane editor, four tabs each in form or YAML mode, nine themes,
+autosave with conflict reconciliation, multi-CV persistence, dark mode,
+an opt-in client-side WASM preview, and optional Google sign-in.
+
+Two things the test suites cannot establish, both needing a human with
+credentials:
+
+- that Google accepts our authorization request — the backend tests
+  patch one seam because the real flow ends at a consent screen;
+- that the migration runs against a live Postgres server — only driver
+  and dialect resolution were exercised, plus the full migration round
+  trip on SQLite.
+
+Both are the first things to run once a provider is chosen.
+`RENDERCV_WEB_SECRET` and `RENDERCV_WEB_HTTPS` must be set before any
+deployment; `web/README.md` carries the operator instructions.
+
+Known debt, none blocking: sign-out is account-wide rather than
+per-device; the favicon is still the SvelteKit default; the photo field
+accepts a URL but not an upload; the placeholder documents are defined
+in both `web/backend/defaults.py` and the frontend's
+`createDefaultDocuments()` with no shared source.

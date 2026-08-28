@@ -5,6 +5,8 @@
 	import type { ActiveCvMeta } from '$lib/stores/cvSession';
 	import { formatRelativeTime } from '$lib/app/relativeTime';
 	import { listVersions, type CvVersionSummary } from '$lib/api/cvs';
+	import type { AuthStatus } from '$lib/api/auth';
+	import AccountMenu from '$lib/components/AccountMenu.svelte';
 
 	let {
 		cvs,
@@ -15,7 +17,9 @@
 		onRename,
 		onDuplicate,
 		onDelete,
-		onRestore
+		onRestore,
+		authStatus,
+		onSignOut
 	}: {
 		cvs: Readable<CvSummary[]>;
 		activeCv: Readable<ActiveCvMeta | null>;
@@ -26,6 +30,8 @@
 		onDuplicate: (id: number) => void;
 		onDelete: (id: number) => void;
 		onRestore: (id: number, versionId: number) => void;
+		authStatus: Readable<AuthStatus>;
+		onSignOut: () => void;
 	} = $props();
 
 	let menuOpenId = $state<number | null>(null);
@@ -340,9 +346,11 @@
 			</ul>
 		</nav>
 
+		<AccountMenu status={authStatus} {onSignOut} />
+
 		<div class="flex items-center gap-1 border-t border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 			<a
-				href="/welcome"
+				href="/"
 				class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-200"
 			>
 				<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">

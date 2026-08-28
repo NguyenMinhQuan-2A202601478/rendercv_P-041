@@ -29,6 +29,7 @@ logger = logging.getLogger("rendercv_web")
 SESSION_COOKIE_NAME = "rendercv_session"
 SECRET_ENV_VAR = "RENDERCV_WEB_SECRET"
 SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
+HTTPS_ENV_VAR = "RENDERCV_WEB_HTTPS"
 
 # Why a hardcoded fallback at all: local `uvicorn` runs must work with zero
 # setup. THIS VALUE IS NOT SAFE FOR PRODUCTION -- it is public (checked into
@@ -56,6 +57,26 @@ def resolve_secret() -> str:
         SECRET_ENV_VAR,
     )
     return DEV_DEFAULT_SECRET
+
+
+def cookie_is_https_only() -> bool:
+    """Whether session cookies should be marked `Secure`.
+
+    Why this is a switch and not a constant: local development serves the
+    app over plain http://localhost, where a `Secure` cookie is simply
+    never sent and nothing works. Every real deployment serves HTTPS, where
+    omitting `Secure` lets the session cookie be read off the wire. Neither
+    value is right for both, so the deployment states which one it is.
+
+    Returns:
+        True when `RENDERCV_WEB_HTTPS` is set to a truthy value.
+    """
+    return os.environ.get(HTTPS_ENV_VAR, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def generate_session_token() -> str:
@@ -148,11 +169,7 @@ def get_current_user(
             value=encode_cookie(token, secret),
             httponly=True,
             samesite="lax",
-            # Why no `secure=True`: local dev serves the frontend over plain
-            # http://localhost. PRODUCTION MUST serve this API over HTTPS
-            # and set `secure=True` here (e.g. behind an env-var switch) --
-            # otherwise the cookie can be read off the wire in transit.
-            secure=False,
+            secure=cookie_is_https_only(),
             max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
         )
 

@@ -19,7 +19,7 @@ from alembic import command
 from alembic.config import Config
 from rendercv_web.db import repository as repo
 from rendercv_web.db.models import Base, CvVersion
-from rendercv_web.db.session import create_engine_from_url
+from rendercv_web.db.session import create_engine_from_url, normalize_database_url
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -410,3 +410,43 @@ class TestMigration:
                 os.environ.pop("RENDERCV_WEB_DATABASE_URL", None)
             else:
                 os.environ["RENDERCV_WEB_DATABASE_URL"] = previous_env_value
+
+
+class TestNormalizeDatabaseUrl:
+    """Provider connection strings must work when pasted in unchanged.
+
+    Both bare forms fail outright without this: SQLAlchemy has no
+    `postgres` dialect, and its default driver for `postgresql` is
+    psycopg2 while the `postgres` extra installs psycopg 3.
+    """
+
+    def test_railway_and_heroku_style_postgres_scheme_is_rewritten(self) -> None:
+        assert (
+            normalize_database_url("postgres://user:pw@host:5432/db")
+            == "postgresql+psycopg://user:pw@host:5432/db"
+        )
+
+    def test_neon_and_supabase_style_postgresql_scheme_is_rewritten(self) -> None:
+        assert (
+            normalize_database_url("postgresql://user:pw@host:5432/db")
+            == "postgresql+psycopg://user:pw@host:5432/db"
+        )
+
+    def test_query_parameters_survive_the_rewrite(self) -> None:
+        # Managed Postgres almost always requires `sslmode=require`; losing
+        # it would turn a working URL into a refused connection.
+        assert (
+            normalize_database_url("postgresql://u:p@host/db?sslmode=require")
+            == "postgresql+psycopg://u:p@host/db?sslmode=require"
+        )
+
+    def test_an_explicitly_chosen_driver_is_left_alone(self) -> None:
+        # Someone who installed psycopg2 themselves asked for it by name.
+        url = "postgresql+psycopg2://user:pw@host/db"
+
+        assert normalize_database_url(url) == url
+
+    def test_sqlite_urls_are_untouched(self) -> None:
+        assert (
+            normalize_database_url("sqlite:///./data/x.db") == "sqlite:///./data/x.db"
+        )

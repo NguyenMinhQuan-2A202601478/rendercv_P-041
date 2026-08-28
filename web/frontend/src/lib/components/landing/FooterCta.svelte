@@ -9,7 +9,7 @@
 			No sign-up required. Start from a blank CV or one of the 9 built-in themes.
 		</p>
 		<a
-			href="/"
+			href="/app"
 			class="mt-6 inline-block rounded-md bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
 		>
 			Open the editor

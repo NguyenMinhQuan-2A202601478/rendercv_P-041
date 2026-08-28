@@ -14,12 +14,19 @@ dependencies = [
   "rendercv[full]",
   "sqlalchemy>=2.0.36",
   "alembic>=1.14.0",
+  "httpx>=0.28.1",
 ]
+
+# Why Postgres is an extra and not a plain dependency: development and the
+# whole test suite run on SQLite, which needs no driver at all, so a
+# deployment opts in with `uv sync --extra postgres` rather than every
+# contributor building a database driver they never use.
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2.3"]
 
 [dependency-groups]
 dev = [
   "pytest>=9.0.2",
-  "httpx>=0.28.1",
 ]
 
 [tool.uv.sources]

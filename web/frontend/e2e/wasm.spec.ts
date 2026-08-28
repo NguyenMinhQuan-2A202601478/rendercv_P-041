@@ -27,13 +27,13 @@ test('client-side engine compiles real CV YAML to a real PDF with no /api/render
 }) => {
 	test.setTimeout(120_000); // cold start: Pyodide + wheel install + typst.ts init, all over the network
 
-	// A real page load (not just `about:blank`) so the module graph resolves
+	// A real load of the editor page (not just `about:blank`) so the module graph resolves
 	// against the dev server's origin and `$lib` aliasing works. This app's
 	// normal bootstrap (unrelated to this test) does its own server
 	// `/api/render` call, so the "no /api/render" assertion below only
 	// watches the window around the client-engine `render()` call itself,
 	// not the whole page lifetime.
-	await page.goto('/');
+	await page.goto('/app');
 
 	// Import and start the engine, and wait for it to become ready, before
 	// the network watch below begins -- this is the multi-second cold start

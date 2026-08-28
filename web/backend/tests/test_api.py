@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from rendercv_web import app as app_module
 from rendercv_web.app import app
 from rendercv_web.cache import render_cache
 from rendercv_web.models import MAX_DOCUMENT_BYTES
@@ -165,3 +166,32 @@ class TestThemes:
         classic = next(theme for theme in themes if theme["name"] == "classic")
         assert classic["design_defaults"]["theme"] == "classic"
         assert "page" in classic["design_defaults"]
+
+
+class TestAllowedOrigins:
+    """CORS origins: a wrong list silently breaks logging in and saving."""
+
+    def test_defaults_to_the_dev_server_when_unset(self, monkeypatch) -> None:
+        monkeypatch.delenv(app_module.ALLOWED_ORIGINS_ENV_VAR, raising=False)
+
+        assert app_module.resolve_allowed_origins() == ["http://localhost:5173"]
+
+    def test_reads_a_comma_separated_list(self, monkeypatch) -> None:
+        monkeypatch.setenv(
+            app_module.ALLOWED_ORIGINS_ENV_VAR,
+            "https://cv.example.com, https://www.example.com",
+        )
+
+        assert app_module.resolve_allowed_origins() == [
+            "https://cv.example.com",
+            "https://www.example.com",
+        ]
+
+    def test_a_blank_value_falls_back_rather_than_allowing_nothing(
+        self, monkeypatch
+    ) -> None:
+        # An empty list would reject every browser request, which is a
+        # worse failure than keeping the documented default.
+        monkeypatch.setenv(app_module.ALLOWED_ORIGINS_ENV_VAR, "  , ,")
+
+        assert app_module.resolve_allowed_origins() == ["http://localhost:5173"]

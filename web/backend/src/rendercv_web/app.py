@@ -8,6 +8,7 @@ Why:
 
 import concurrent.futures
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -33,6 +34,7 @@ from .models import (
     ThemeInfo,
     ValidResponse,
 )
+from .oauth import router as auth_router
 from .preferences import router as preferences_router
 from .schema import load_schema
 from .themes import list_theme_defaults
@@ -40,6 +42,31 @@ from .themes import list_theme_defaults
 logger = logging.getLogger("rendercv_web")
 
 RENDER_TIMEOUT_SECONDS = 30.0
+
+ALLOWED_ORIGINS_ENV_VAR = "RENDERCV_WEB_ALLOWED_ORIGINS"
+DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173"]
+
+
+def resolve_allowed_origins() -> list[str]:
+    """Read the browser origins allowed to call this API.
+
+    Why this is configurable rather than a constant: the session cookie is
+    sent with `allow_credentials=True`, and a browser refuses to send or
+    accept credentialed cross-origin requests unless the origin is listed
+    exactly. A deployment whose frontend is served from anywhere other than
+    the dev server would therefore silently fail to log in or save
+    anything -- with a CORS error in the console as the only clue.
+
+    A deployment serving the frontend and this API from the same origin (a
+    reverse proxy putting `/api` on the app's own host) needs no CORS at
+    all, and can leave this unset.
+
+    Returns:
+        The configured origins, or the dev server's origin when unset.
+    """
+    configured = os.environ.get(ALLOWED_ORIGINS_ENV_VAR, "")
+    origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return origins or DEFAULT_ALLOWED_ORIGINS
 
 
 @asynccontextmanager
@@ -67,13 +94,14 @@ app = FastAPI(title="RenderCV Web Editor API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=resolve_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 register_exception_handlers(app)
+app.include_router(auth_router)
 app.include_router(cvs_router)
 app.include_router(preferences_router)
 

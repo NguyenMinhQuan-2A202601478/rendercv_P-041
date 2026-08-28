@@ -595,6 +595,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "rendercv", extra = ["full"] },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
@@ -610,6 +611,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14.0" },
     { name = "fastapi", specifier = ">=0.121.2" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "rendercv", extras = ["full"], editable = "../../" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "uvicorn", specifier = ">=0.38.0" },

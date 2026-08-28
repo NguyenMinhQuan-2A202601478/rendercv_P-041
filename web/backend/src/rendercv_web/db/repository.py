@@ -472,3 +472,131 @@ def set_preference(session: Session, user_id: int, key: str, value: str) -> Pref
 
     session.refresh(pref)
     return pref
+
+
+def get_user_by_auth_identity(
+    session: Session, auth_provider: str, auth_provider_id: str
+) -> User | None:
+    """Find the account row for a provider identity, if it exists.
+
+    Why:
+        The provider's stable subject id -- not the email, which a user can
+        change at the provider -- is what identifies an account across
+        devices and across sign-ins.
+
+    Args:
+        session: The database session.
+        auth_provider: Provider key, e.g. `"google"`.
+        auth_provider_id: The provider's stable subject id for this user.
+
+    Returns:
+        The matching `User`, or None if this identity has never signed in.
+    """
+    return session.execute(
+        select(User).where(
+            User.auth_provider == auth_provider,
+            User.auth_provider_id == auth_provider_id,
+        )
+    ).scalar_one_or_none()
+
+
+def promote_user_to_account(
+    session: Session,
+    user: User,
+    auth_provider: str,
+    auth_provider_id: str,
+    email: str | None,
+    display_name: str | None,
+) -> User:
+    """Turn the caller's existing anonymous row into an account row.
+
+    Why:
+        This is the first-sign-in path, and it is deliberately not a data
+        migration: the anonymous row already owns the user's CVs and
+        preferences, so stamping the account identity onto that same row
+        carries everything across with zero copying and zero chance of a
+        partial move.
+
+    Args:
+        session: The database session.
+        user: The anonymous row identified by the caller's session cookie.
+        auth_provider: Provider key, e.g. `"google"`.
+        auth_provider_id: The provider's stable subject id.
+        email: The account's email, if the provider supplied one.
+        display_name: The account's display name, if the provider supplied one.
+
+    Returns:
+        The same row, now carrying the account identity.
+    """
+    user.auth_provider = auth_provider
+    user.auth_provider_id = auth_provider_id
+    user.email = email
+    user.display_name = display_name
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def claim_anonymous_user(
+    session: Session, anonymous_user: User, account_user: User
+) -> User:
+    """Move an anonymous session's CVs and preferences into an existing account.
+
+    Why:
+        Signing in on a second browser resolves to an account row that
+        already exists, so the CVs written while anonymous in *this*
+        browser would otherwise be stranded on a row nothing points at any
+        more. Moving them is the behaviour that never loses a user's work.
+
+        Preferences are merged the other way round: a key the account
+        already has keeps the account's value, and only keys it lacks are
+        carried over. The account's own settings are the durable ones; a
+        throwaway anonymous session should not silently redecorate them.
+
+    Args:
+        session: The database session.
+        anonymous_user: The row identified by the caller's current cookie.
+        account_user: The already-existing account row to merge into.
+
+    Returns:
+        `account_user`, now owning the merged CVs and preferences.
+
+    Raises:
+        ValueError: If asked to merge a row into itself, which would delete
+            the very row it just moved everything to.
+    """
+    if anonymous_user.id == account_user.id:
+        message = "claim_anonymous_user called with the same row twice."
+        raise ValueError(message)
+
+    session.execute(
+        update(Cv)
+        .where(Cv.user_id == anonymous_user.id)
+        .values(user_id=account_user.id)
+    )
+
+    account_keys = {
+        key
+        for (key,) in session.execute(
+            select(Preference.key).where(Preference.user_id == account_user.id)
+        )
+    }
+    for preference in session.execute(
+        select(Preference).where(Preference.user_id == anonymous_user.id)
+    ).scalars():
+        if preference.key not in account_keys:
+            session.add(
+                Preference(
+                    user_id=account_user.id,
+                    key=preference.key,
+                    value=preference.value,
+                )
+            )
+        session.delete(preference)
+
+    # The anonymous row is now empty of anything worth keeping, and leaving
+    # it would let its still-valid cookie resolve to a live, CV-less user.
+    session.delete(anonymous_user)
+    session.commit()
+    session.refresh(account_user)
+    return account_user

@@ -304,6 +304,21 @@ class CvVersionSummary(pydantic.BaseModel):
     created_at: datetime
 
 
+class AuthStatus(pydantic.BaseModel):
+    """Response body for `GET /api/auth/me`.
+
+    Why `provider_available` sits alongside the identity: a deployment with
+    no Google credentials is a supported deployment, and the client must be
+    able to hide the sign-in UI entirely rather than offering a button that
+    can only fail.
+    """
+
+    authenticated: bool
+    email: str | None
+    display_name: str | None
+    provider_available: bool
+
+
 class PreferenceUpdateRequest(pydantic.BaseModel):
     """Request body for `PUT /api/preferences`."""
 

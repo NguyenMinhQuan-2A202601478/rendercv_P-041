@@ -24,7 +24,7 @@ Why:
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -33,30 +33,45 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    """An anonymous device-session identity (auth model option A).
+    """One identity: an anonymous device session, or a signed-in account.
 
     Why:
-        No email/password/OAuth in this phase -- a signed HTTPOnly session
-        cookie (owned by the Phase 4b API layer) carries an opaque
-        `session_token` that identifies this row. `id` is the stable
-        integer users, cvs, and preferences reference internally.
+        A signed HTTPOnly cookie carries the opaque `session_token` that
+        identifies this row, and that stays true after Phase 6 added
+        Google sign-in -- signing in swaps the cookie to the *account*
+        row's token rather than introducing a second identity mechanism.
+        That is what lets an anonymous session be "claimed" by an account
+        without losing its CVs (`repository.claim_anonymous_user`).
 
-    Seam for later auth (do not add yet -- no decision record for it):
-        When email/OAuth login is added, add nullable
-        `auth_provider: Mapped[str | None]` and
-        `auth_provider_id: Mapped[str | None]` columns here (plus a unique
-        constraint on `(auth_provider, auth_provider_id)`) in their own
-        migration. `session_token` keeps working so an anonymous session
-        can be "claimed" by a real account without losing its CVs.
+    The auth columns are all nullable because an anonymous row has none of
+    them; `(auth_provider, auth_provider_id)` is unique so one Google
+    account maps to exactly one row, which is what makes signing in on a
+    second device find the existing account instead of creating another.
+
+    Known limitation (acceptable for this phase, not for a large
+    deployment): one account has one `session_token`, so signing in on a
+    second device reuses the same token rather than minting a per-device
+    session. Rotating it on sign-out would therefore sign out every
+    device. A separate `sessions` table is the fix when that matters.
     """
 
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint(
+            "auth_provider", "auth_provider_id", name="uq_users_auth_provider_identity"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_token: Mapped[str] = mapped_column(
         String(128), unique=True, nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+    # Null on an anonymous row; set together when an account signs in.
+    auth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    auth_provider_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     cvs: Mapped[list["Cv"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True

@@ -33,6 +33,7 @@ from .models import (
     ThemeInfo,
     ValidResponse,
 )
+from .oauth import router as auth_router
 from .preferences import router as preferences_router
 from .schema import load_schema
 from .themes import list_theme_defaults
@@ -74,6 +75,7 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+app.include_router(auth_router)
 app.include_router(cvs_router)
 app.include_router(preferences_router)
 

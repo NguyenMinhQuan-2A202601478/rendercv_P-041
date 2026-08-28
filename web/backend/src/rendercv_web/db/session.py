@@ -70,17 +70,46 @@ def ensure_sqlite_directory(url: str) -> None:
     pathlib.Path(path_part).parent.mkdir(parents=True, exist_ok=True)
 
 
+def normalize_database_url(url: str) -> str:
+    """Point bare Postgres URLs at the driver this project actually installs.
+
+    Why:
+        Hosting providers hand out connection strings as `postgres://...`
+        (Railway, Heroku) or `postgresql://...` (Neon, Supabase), and both
+        fail here if pasted as-is: SQLAlchemy has no `postgres` dialect at
+        all, and its default driver for `postgresql` is psycopg2, while the
+        `postgres` extra installs psycopg 3. Deployment would fail at
+        startup with `NoSuchModuleError` or `ModuleNotFoundError` -- errors
+        that say nothing about the real problem being a URL prefix.
+
+        An explicitly chosen driver (`postgresql+psycopg2://`, for someone
+        who installed psycopg2 themselves) is left exactly as written.
+
+    Args:
+        url: A database URL, possibly in a provider's own form.
+
+    Returns:
+        The URL with a driver SQLAlchemy can load, unchanged for every
+        non-Postgres URL.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
 def create_engine_from_url(url: str) -> Engine:
     """Build a configured `Engine` for `url`, portable across SQLite/Postgres.
 
     Args:
         url: A SQLAlchemy database URL (e.g. `sqlite:///./data/x.db` or
-            `postgresql+psycopg://...`).
+            `postgresql://...`, in any form a provider hands out).
 
     Returns:
         An `Engine` with SQLite foreign-key enforcement enabled when `url`
         is a SQLite URL; a plain engine otherwise.
     """
+    url = normalize_database_url(url)
     is_sqlite = url.startswith("sqlite")
     connect_args = {"check_same_thread": False} if is_sqlite else {}
     engine = sa.create_engine(url, connect_args=connect_args, future=True)

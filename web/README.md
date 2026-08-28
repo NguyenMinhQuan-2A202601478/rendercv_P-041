@@ -69,7 +69,10 @@ phiên ẩn danh, và các CV thuộc về phiên đó.
 | Biến môi trường | Mặc định | Ghi chú |
 | --- | --- | --- |
 | `RENDERCV_WEB_DATABASE_URL` | `sqlite:///./data/rendercv_web.db` | Nhận mọi URL kiểu SQLAlchemy. Postgres chạy được mà không cần sửa code. |
-| `RENDERCV_WEB_SECRET` | *(giá trị dev không an toàn)* | Dùng để ký cookie phiên. **Bắt buộc phải đặt trước khi deploy** -- xem mục cuối. |
+| `RENDERCV_WEB_SECRET` | *(giá trị dev không an toàn)* | Dùng để ký cookie phiên. **Bắt buộc phải đặt trước khi deploy** -- xem mục [Deploy](#deploy). |
+| `RENDERCV_WEB_HTTPS` | *(tắt)* | Đặt `1` khi phục vụ qua HTTPS để cookie phiên có cờ `Secure`. |
+| `RENDERCV_WEB_ALLOWED_ORIGINS` | `http://localhost:5173` | Origin được phép gọi API, ngăn cách bằng dấu phẩy. Chỉ cần khi frontend khác origin với API. |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(chưa đặt)* | Bật đăng nhập Google. Chưa đặt thì giao diện đăng nhập bị ẩn hoàn toàn. |
 
 ## Kiểm thử
 
@@ -154,15 +157,94 @@ từ CDN jsdelivr, và vài dependency Python thuần nhỏ được lấy từ 
 chạy. Khởi động nguội mất khoảng 17-20 giây; các lần render sau khi đã nóng
 máy dưới một giây.
 
-## Trước khi deploy
+## Đăng nhập Google (tuỳ chọn)
 
-- **Đặt `RENDERCV_WEB_SECRET`** thành một chuỗi ngẫu nhiên đủ dài và giữ
-  ngoài mã nguồn. Giá trị dự phòng là một chuỗi hardcode đã nằm trong một
-  repository công khai -- bất kỳ ai cũng có thể giả mạo cookie phiên có chữ
-  ký hợp lệ dựa vào nó. Backend có ghi cảnh báo khi biến này chưa được đặt,
-  nhưng không có gì cưỡng chế cả.
-- Trỏ `RENDERCV_WEB_DATABASE_URL` sang Postgres có quản lý. Không cần sửa
-  code; migration vẫn chạy lúc khởi động như thường.
+Ứng dụng chạy đầy đủ mà không cần đăng nhập -- phiên ẩn danh theo cookie là
+mặc định. Bật đăng nhập chỉ thêm một khả năng: dùng chung CV giữa nhiều
+trình duyệt và thiết bị.
+
+Khi chưa cấu hình, backend báo `provider_available: false` và giao diện **ẩn
+toàn bộ** nút đăng nhập -- không có nút chết.
+
+Tạo OAuth client ở [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
+chọn *Create credentials* → *OAuth client ID* → *Web application*, rồi khai
+báo **Authorized redirect URI** đúng bằng địa chỉ mà trình duyệt sẽ quay về:
+
+| Môi trường | Redirect URI |
+| --- | --- |
+| Dev | `http://localhost:5173/api/auth/google/callback` |
+| Deploy | `https://<tên-miền-của-bạn>/api/auth/google/callback` |
+
+URI phải khớp **từng ký tự**, kể cả `https` và dấu `/` cuối. Sai một chút là
+Google trả `redirect_uri_mismatch`.
+
+Rồi đặt biến môi trường cho backend:
+
+```
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REDIRECT_URI=https://<tên-miền-của-bạn>/api/auth/google/callback
+```
+
+Lần đầu một người đăng nhập, các CV họ đã soạn khi còn ẩn danh **được gộp
+vào tài khoản**, không mất gì. Đăng nhập ở trình duyệt thứ hai cũng vậy: CV
+soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có.
+
+## Deploy
+
+### Biến môi trường
+
+| Biến | Bắt buộc | Ghi chú |
+| --- | --- | --- |
+| `RENDERCV_WEB_SECRET` | **Có** | Chuỗi ngẫu nhiên đủ dài, giữ ngoài mã nguồn. Xem cảnh báo bên dưới. |
+| `RENDERCV_WEB_HTTPS` | **Có** (khi chạy HTTPS) | Đặt `1` để cookie phiên được đánh dấu `Secure`. Không đặt thì cookie đi qua mạng ở dạng đọc được. |
+| `RENDERCV_WEB_DATABASE_URL` | Nên có | Chuỗi kết nối Postgres. Không đặt thì rơi về SQLite theo file, sẽ mất dữ liệu mỗi lần container khởi động lại. |
+| `RENDERCV_WEB_ALLOWED_ORIGINS` | Chỉ khi khác origin | Danh sách origin của frontend, ngăn cách bằng dấu phẩy. Bỏ qua nếu frontend và API cùng một origin. |
+| `GOOGLE_OAUTH_*` | Không | Xem mục trên. |
+
+> **`RENDERCV_WEB_SECRET` là thứ dễ quên nhất và hậu quả nặng nhất.** Giá
+> trị dự phòng là một chuỗi hardcode nằm trong repository công khai -- ai
+> cũng có thể giả mạo cookie phiên có chữ ký hợp lệ và đọc CV của người
+> khác. Backend chỉ ghi cảnh báo vào log chứ không chặn, nên không có gì
+> nhắc bạn ngoài dòng log đó.
+
+### Postgres
+
+Cài kèm driver -- **đây là bước hay bị bỏ sót**, thiếu nó backend chết ngay
+lúc khởi động:
+
+```
+uv sync --extra postgres
+```
+
+Chuỗi kết nối dán thẳng từ nhà cung cấp là dùng được. Cả ba dạng dưới đây
+đều chạy, vì backend tự chuẩn hoá về driver đã cài:
+
+```
+postgres://...              (Railway, Heroku)
+postgresql://...            (Neon, Supabase)
+postgresql+psycopg://...    (dạng SQLAlchemy đầy đủ)
+```
+
+Không cần chạy migration bằng tay: backend tự nâng schema lên bản mới nhất
+lúc khởi động.
+
+### CORS
+
+Nếu frontend và API phục vụ **cùng một origin** (reverse proxy đưa `/api`
+về backend), bỏ qua mục này.
+
+Nếu **khác origin** (ví dụ frontend trên Vercel, backend trên Railway), phải
+khai báo origin của frontend:
+
+```
+RENDERCV_WEB_ALLOWED_ORIGINS=https://cv.example.com
+```
+
+Cookie phiên gửi kèm `credentials`, nên trình duyệt sẽ **từ chối** mọi
+request nếu origin không khớp chính xác. Triệu chứng rất dễ gây hiểu lầm:
+trang tải bình thường nhưng không đăng nhập được và không lưu được gì, dấu
+vết duy nhất là lỗi CORS trong console.
 
 ## Đọc tiếp ở đâu
 

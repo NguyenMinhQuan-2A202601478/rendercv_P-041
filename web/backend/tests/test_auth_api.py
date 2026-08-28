@@ -169,9 +169,7 @@ class TestSignInFlow:
         assert "scope=openid+email+profile" in location
         assert oauth.STATE_COOKIE_NAME in response.cookies
 
-    def test_callback_signs_the_user_in(
-        self, client: TestClient, monkeypatch
-    ) -> None:
+    def test_callback_signs_the_user_in(self, client: TestClient, monkeypatch) -> None:
         patch_identity(monkeypatch)
 
         sign_in(client)

@@ -35,12 +35,16 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Add the nullable account-identity columns and their unique constraint."""
     with op.batch_alter_table("users", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("auth_provider", sa.String(length=32), nullable=True))
+        batch_op.add_column(
+            sa.Column("auth_provider", sa.String(length=32), nullable=True)
+        )
         batch_op.add_column(
             sa.Column("auth_provider_id", sa.String(length=255), nullable=True)
         )
         batch_op.add_column(sa.Column("email", sa.String(length=320), nullable=True))
-        batch_op.add_column(sa.Column("display_name", sa.String(length=255), nullable=True))
+        batch_op.add_column(
+            sa.Column("display_name", sa.String(length=255), nullable=True)
+        )
         batch_op.create_unique_constraint(
             "uq_users_auth_provider_identity", ["auth_provider", "auth_provider_id"]
         )

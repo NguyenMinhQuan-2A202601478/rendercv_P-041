@@ -186,11 +186,31 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 GOOGLE_OAUTH_REDIRECT_URI=https://<tên-miền-của-bạn>/api/auth/google/callback
 ```
 
-Lần đầu một người đăng nhập, các CV họ đã soạn khi còn ẩn danh **được gộp
-vào tài khoản**, không mất gì. Đăng nhập ở trình duyệt thứ hai cũng vậy: CV
-soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có.
+### Phiên và tài khoản hoạt động thế nào
+
+| Tình huống | Điều xảy ra |
+| --- | --- |
+| Đăng nhập lần đầu | CV đã soạn khi còn ẩn danh **được gộp vào tài khoản**, không mất gì |
+| Đăng nhập ở trình duyệt thứ hai | CV soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có |
+| Đang đăng nhập rồi đăng nhập bằng **tài khoản Google khác** | Chuyển tài khoản sạch sẽ: tài khoản cũ **không bị đụng tới**, CV của nó vẫn thuộc về nó |
+| Đăng xuất | **Thoát trên mọi thiết bị**, không chỉ trình duyệt hiện tại |
+
+Hai dòng cuối đáng chú ý:
+
+- Trường hợp đổi tài khoản từng là một lỗi nghiêm trọng — tài khoản thứ nhất
+  bị ghi đè hoặc xoá hẳn, CV rơi sang người mới. Đã sửa và có test hồi quy
+  canh giữ.
+- Đăng xuất thoát mọi thiết bị vì một tài khoản chỉ có một `session_token`.
+  Đây là lựa chọn có chủ đích: giữa "bị thoát bất ngờ ở máy khác" và "phiên
+  không thu hồi được", cái đầu tốn một cú click, cái sau mất tài khoản.
+  Muốn thoát theo từng thiết bị thì cần thêm bảng `sessions` riêng.
 
 ## Deploy
+
+> Cần hướng dẫn từng bước (tạo OAuth client, chọn Postgres, chạy migration,
+> kiểm chứng)? Xem
+> [`docs/runbooks/enable-google-sign-in-and-postgres.md`](../docs/runbooks/enable-google-sign-in-and-postgres.md).
+> Mục dưới đây là phần tra cứu.
 
 ### Biến môi trường
 

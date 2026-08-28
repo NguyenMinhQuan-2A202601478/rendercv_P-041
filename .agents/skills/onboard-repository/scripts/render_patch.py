@@ -38,7 +38,9 @@ def require_relative_path(value: str) -> None:
 
 
 def render_patch(before: bytes, after: bytes, destination: str) -> str:
-    require(before != after, "complete after image is identical to the pinned destination")
+    require(
+        before != after, "complete after image is identical to the pinned destination"
+    )
     require(before.endswith(b"\n"), "destinations without a final LF are unsupported")
     require(after.endswith(b"\n"), "complete after image must end with LF")
     try:
@@ -55,8 +57,10 @@ def render_patch(before: bytes, after: bytes, destination: str) -> str:
             lineterm="\n",
         )
     )
-    require(patch.startswith(f"--- a/{destination}\n+++ b/{destination}\n"),
-            "renderer did not produce the expected file headers")
+    require(
+        patch.startswith(f"--- a/{destination}\n+++ b/{destination}\n"),
+        "renderer did not produce the expected file headers",
+    )
     require("@@ " in patch, "renderer did not produce a numbered patch hunk")
     require(patch.endswith("\n"), "rendered patch must end with LF")
     return patch
@@ -103,7 +107,8 @@ def main() -> int:
             print(json.dumps({"self_test": "passed", "valid": True}, sort_keys=True))
             return 0
         require(
-            isinstance(args.revision, str) and REVISION_RE.fullmatch(args.revision) is not None,
+            isinstance(args.revision, str)
+            and REVISION_RE.fullmatch(args.revision) is not None,
             "--revision must be a full lowercase 40-character Git revision",
         )
         require(isinstance(args.destination, str), "--destination is required")
@@ -130,7 +135,10 @@ def main() -> int:
         print(f"<!-- ONBOARDING_PATCH:{args.hunk_id}:END -->")
         return 0
     except (OSError, RenderError) as exc:
-        print(json.dumps({"error": str(exc), "valid": False}, sort_keys=True), file=sys.stderr)
+        print(
+            json.dumps({"error": str(exc), "valid": False}, sort_keys=True),
+            file=sys.stderr,
+        )
         return 1
 
 

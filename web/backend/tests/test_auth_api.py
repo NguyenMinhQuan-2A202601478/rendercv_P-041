@@ -16,13 +16,16 @@ Why there is no real Google here:
 from collections.abc import Iterator
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from rendercv_web import oauth
 from rendercv_web.app import app
+from rendercv_web.db.models import User
 from rendercv_web.db.session import (
     build_session_factory,
     create_engine_from_url,
     get_session,
+    resolve_database_url,
 )
 
 
@@ -115,6 +118,13 @@ def sign_in(client: TestClient, code: str = "auth-code") -> None:
         follow_redirects=False,
     )
     assert callback.status_code == 303, callback.text
+
+
+def count_users() -> int:
+    """Count rows in `users` on the database the current client is wired to."""
+    factory = build_session_factory(create_engine_from_url(resolve_database_url()))
+    with factory() as db:
+        return db.execute(sa.select(sa.func.count()).select_from(User)).scalar() or 0
 
 
 class TestAuthStatus:
@@ -308,3 +318,164 @@ class TestAnonymousWorkIsKept:
             assert preferences["zoom"] == "125"  # a key it lacked is carried over
         finally:
             app.dependency_overrides.pop(get_session, None)
+
+
+class TestAccountSwitching:
+    """Signing in as a different account must never touch the first one.
+
+    Why this class exists: the original suite only covered "anonymous then
+    sign in" and "sign in twice as the same account", so it missed the
+    state `prompt=select_account` explicitly invites -- an already
+    signed-in browser choosing a different Google account. Both branches
+    destroyed the first account.
+    """
+
+    def test_switching_to_a_new_identity_leaves_the_first_account_intact(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
+        client.post("/api/cvs", json={"name": "CV of Alice"})
+        sign_in(client)
+
+        patch_identity(monkeypatch, subject="g-bob", email="bob@example.com")
+        sign_in(client, code="bob-code")
+
+        # Bob is in his own, empty account...
+        assert client.get("/api/auth/me").json()["email"] == "bob@example.com"
+        assert client.get("/api/cvs").json() == []
+
+        # ...and Alice can still sign in, with her CV where she left it.
+        patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
+        sign_in(client, code="alice-again")
+        assert client.get("/api/auth/me").json()["email"] == "alice@example.com"
+        assert [cv["name"] for cv in client.get("/api/cvs").json()] == ["CV of Alice"]
+
+    def test_switching_to_an_existing_account_does_not_delete_the_first(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        patch_identity(monkeypatch, subject="g-bob", email="bob@example.com")
+        first = make_client(tmp_path, monkeypatch, db_name="switch.db")
+        try:
+            first.post("/api/cvs", json={"name": "CV of Bob"})
+            sign_in(first)
+        finally:
+            first.__exit__(None, None, None)
+
+        second = TestClient(app, cookies={})
+        try:
+            patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
+            second.post("/api/cvs", json={"name": "CV of Alice"})
+            sign_in(second, code="alice-code")
+
+            # Alice, signed in, now signs in as Bob on her own machine.
+            patch_identity(monkeypatch, subject="g-bob", email="bob@example.com")
+            sign_in(second, code="bob-code")
+            assert [cv["name"] for cv in second.get("/api/cvs").json()] == ["CV of Bob"]
+
+            # Alice's account survived, with her CV still hers.
+            patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
+            sign_in(second, code="alice-again")
+            assert second.get("/api/auth/me").json()["email"] == "alice@example.com"
+            assert [cv["name"] for cv in second.get("/api/cvs").json()] == [
+                "CV of Alice"
+            ]
+        finally:
+            app.dependency_overrides.pop(get_session, None)
+
+
+class TestSessionTokenLifecycle:
+    """A token must not outlive the privilege level it was issued under."""
+
+    def test_signing_in_replaces_the_pre_authentication_token(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        # Session fixation: whoever used this browser before signing in may
+        # know the anonymous token, and it must not keep working against
+        # the account afterwards.
+        patch_identity(monkeypatch)
+        client.get("/api/cvs")  # mint the anonymous session
+        anonymous_cookie = client.cookies["rendercv_session"]
+
+        sign_in(client)
+
+        assert client.cookies["rendercv_session"] != anonymous_cookie
+
+        stale = TestClient(app, cookies={"rendercv_session": anonymous_cookie})
+        assert stale.get("/api/auth/me").json()["authenticated"] is False
+
+    def test_signing_out_invalidates_the_token_not_just_the_cookie(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        # A control labelled "Sign out" has to revoke: a captured copy of
+        # the cookie must stop working, not merely be dropped locally.
+        patch_identity(monkeypatch)
+        sign_in(client)
+        captured = client.cookies["rendercv_session"]
+
+        client.post("/api/auth/logout")
+
+        replayed = TestClient(app, cookies={"rendercv_session": captured})
+        assert replayed.get("/api/auth/me").json()["authenticated"] is False
+
+    def test_signing_out_anonymously_keeps_the_session_reachable(
+        self, client: TestClient
+    ) -> None:
+        # An anonymous token is the only route back to that session's CVs,
+        # so rotating it would strand work rather than protect anything.
+        client.post("/api/cvs", json={"name": "Anonymous work"})
+        cookie = client.cookies["rendercv_session"]
+
+        client.post("/api/auth/logout")
+
+        still_there = TestClient(app, cookies={"rendercv_session": cookie})
+        assert [cv["name"] for cv in still_there.get("/api/cvs").json()] == [
+            "Anonymous work"
+        ]
+
+
+class TestStatusEndpointCreatesNothing:
+    """`/api/auth/me` is asked on every landing-page visit, including bots."""
+
+    def test_asking_who_i_am_does_not_create_a_session(
+        self, client: TestClient
+    ) -> None:
+        # The fixture is here for the throwaway database it wires up; the
+        # visitors below deliberately arrive with no cookie of their own.
+        del client
+        for _ in range(5):
+            visitor = TestClient(app, cookies={})
+            body = visitor.get("/api/auth/me").json()
+            assert body["authenticated"] is False
+            assert "rendercv_session" not in visitor.cookies
+
+        assert count_users() == 0
+
+
+class TestStateCookieHygiene:
+    """The state cookie is the only CSRF protection on the callback."""
+
+    def test_declining_consent_clears_the_state_cookie(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        patch_identity(monkeypatch)
+        client.get("/api/auth/google/start", follow_redirects=False)
+        assert client.cookies.get(oauth.STATE_COOKIE_NAME)
+
+        client.get(
+            "/api/auth/google/callback?error=access_denied", follow_redirects=False
+        )
+
+        assert not client.cookies.get(oauth.STATE_COOKIE_NAME)
+
+    def test_a_rejected_callback_clears_the_state_cookie(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        patch_identity(monkeypatch)
+        client.get("/api/auth/google/start", follow_redirects=False)
+
+        response = client.get(
+            "/api/auth/google/callback?code=c&state=wrong", follow_redirects=False
+        )
+
+        assert response.status_code == 400
+        assert not client.cookies.get(oauth.STATE_COOKIE_NAME)

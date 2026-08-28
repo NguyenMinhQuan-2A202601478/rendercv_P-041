@@ -32,7 +32,7 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from .auth import (
@@ -42,6 +42,7 @@ from .auth import (
     cookie_is_https_only,
     decode_cookie,
     encode_cookie,
+    generate_session_token,
     resolve_secret,
 )
 from .db import repository
@@ -215,22 +216,38 @@ def fetch_google_identity(code: str, config: OAuthConfig) -> GoogleIdentity:
 
 
 @router.get("/me")
-def read_auth_status(current_user: CurrentUser) -> AuthStatus:
+def read_auth_status(
+    session: SessionDep,
+    rendercv_session: Annotated[str | None, Cookie()] = None,
+) -> AuthStatus:
     """Report who the caller is, and whether sign-in is available at all.
 
     Why one endpoint for both: the client needs both answers before it can
     decide what to render, and asking twice would let them disagree.
 
+    Why this resolves the session by hand instead of depending on
+    `CurrentUser`: that dependency *creates* a row and issues a year-long
+    cookie for any caller without one. The landing page asks this question
+    on every visit, so depending on it would mint a row for every crawler,
+    link preview and uptime check that touches the public front page. A
+    question about the session must not bring one into existence.
+
     Args:
-        current_user: The row this request's session cookie resolves to.
+        session: The database session.
+        rendercv_session: The raw session cookie, if the client sent one.
 
     Returns:
         The caller's account state plus provider availability.
     """
+    token = (
+        decode_cookie(rendercv_session, resolve_secret()) if rendercv_session else None
+    )
+    user = repository.get_user_by_token(session, token) if token else None
+
     return AuthStatus(
-        authenticated=current_user.auth_provider is not None,
-        email=current_user.email,
-        display_name=current_user.display_name,
+        authenticated=user is not None and user.auth_provider is not None,
+        email=user.email if user else None,
+        display_name=user.display_name if user else None,
         provider_available=resolve_oauth_config() is not None,
     )
 
@@ -281,15 +298,22 @@ def complete_google_sign_in(
     state: str | None = None,
     error: str | None = None,
     rendercv_oauth_state: Annotated[str | None, Cookie()] = None,
-) -> RedirectResponse:
+) -> Response:
     """Finish sign-in: verify state, resolve the account, set the cookie.
 
-    Why the anonymous row is handled two different ways: if this Google
-    identity has never signed in, the caller's existing anonymous row is
-    promoted in place, so its CVs come along without being copied. If the
-    identity already has an account -- signing in on a second browser --
-    the anonymous row's CVs are moved into it and the row is retired (see
-    `repository.claim_anonymous_user`).
+    The caller's current row is either anonymous or an account already, and
+    the two cases must never be treated alike:
+
+    - Anonymous, identity unknown -- promote that row in place, so its CVs
+      come along without being copied and cannot be half-moved.
+    - Anonymous, identity known -- move the row's CVs into the existing
+      account and retire the row (`repository.claim_anonymous_user`).
+    - Already an account -- this is an account switch, invited by the
+      `prompt=select_account` on `/google/start`. The current row belongs
+      to somebody's account: rewriting its identity would destroy that
+      account and hand its CVs to the incoming user, and merging would
+      delete it outright. So nothing is promoted or merged; the incoming
+      identity gets its own session.
 
     Args:
         session: The database session.
@@ -313,7 +337,9 @@ def complete_google_sign_in(
         # The user pressed "cancel" on Google's screen. Not an error worth a
         # stack trace: send them back to where they started.
         logger.info("Google sign-in was declined: %s", error)
-        return RedirectResponse(POST_LOGIN_PATH, status_code=303)
+        declined = RedirectResponse(POST_LOGIN_PATH, status_code=303)
+        declined.delete_cookie(STATE_COOKIE_NAME)
+        return declined
 
     expected_state = (
         decode_cookie(rendercv_oauth_state, resolve_secret())
@@ -324,27 +350,49 @@ def complete_google_sign_in(
         state and expected_state and secrets.compare_digest(state, expected_state)
     )
     if not code or not state_is_valid:
-        raise HTTPException(
-            status_code=400, detail="This sign-in link is invalid or has expired."
+        # Returned rather than raised so the spent state cookie can be
+        # cleared on the way out: leaving it valid for its full ten minutes
+        # keeps a replayable state around, which is the exact window the
+        # state parameter exists to close.
+        rejected = JSONResponse(
+            status_code=400,
+            content={"detail": "This sign-in link is invalid or has expired."},
         )
+        rejected.delete_cookie(STATE_COOKIE_NAME)
+        return rejected
 
     identity = fetch_google_identity(code, config)
 
     existing_account = repository.get_user_by_auth_identity(
         session, AUTH_PROVIDER, identity.subject
     )
-    if existing_account is None:
-        account = repository.promote_user_to_account(
+    caller_is_signed_in = current_user.auth_provider is not None
+
+    if existing_account is not None and existing_account.id == current_user.id:
+        # Already signed into this account in this browser; nothing to do.
+        account = existing_account
+    elif caller_is_signed_in:
+        # Switching accounts. The current row is somebody's account, so it is
+        # left completely alone -- including its CVs, which belong to the
+        # account being switched away from, not to this sign-in.
+        account = existing_account or repository.create_account_user(
             session,
-            current_user,
+            generate_session_token(),
             auth_provider=AUTH_PROVIDER,
             auth_provider_id=identity.subject,
             email=identity.email,
             display_name=identity.display_name,
         )
-    elif existing_account.id == current_user.id:
-        # Already signed into this account in this browser; nothing to merge.
-        account = existing_account
+    elif existing_account is None:
+        account = repository.promote_user_to_account(
+            session,
+            current_user,
+            generate_session_token(),
+            auth_provider=AUTH_PROVIDER,
+            auth_provider_id=identity.subject,
+            email=identity.email,
+            display_name=identity.display_name,
+        )
     else:
         account = repository.claim_anonymous_user(
             session, current_user, existing_account
@@ -364,19 +412,39 @@ def complete_google_sign_in(
 
 
 @router.post("/logout", status_code=204)
-def sign_out(response: Response) -> None:
-    """Sign out of this browser by clearing the session cookie.
+def sign_out(
+    response: Response,
+    session: SessionDep,
+    rendercv_session: Annotated[str | None, Cookie()] = None,
+) -> None:
+    """Sign out by clearing the cookie *and* invalidating the token it carried.
 
-    Why the account row is left alone: the row *is* the user's data. The
-    next request without a cookie simply starts a fresh anonymous session,
-    and signing in again resolves back to the same account.
+    Why the token is rotated and not just the cookie dropped: clearing a
+    cookie only affects the browser doing the clearing. Anyone holding a
+    copy of that cookie value -- taken from a shared machine, a synced
+    profile, or a proxy log from before HTTPS was enforced -- would keep
+    full access for the cookie's remaining year while the user believes
+    the session is closed. A control labelled "Sign out" has to revoke.
 
-    This signs out this browser only. The account's `session_token` is not
-    rotated, because every device signed into the account shares it --
-    rotating would sign them all out. See `db.models.User` for why that
-    trade-off is recorded rather than fixed here.
+    Because one account has one token (`db.models.User` records why), this
+    signs the account out of every device rather than only this one. That
+    is the safe direction of the two: an unexpected sign-out elsewhere
+    costs a click, an unrevoked session costs the account.
+
+    Anonymous rows are deliberately exempt. Their token is the only way
+    back to their CVs, so rotating it would strand a user's work rather
+    than protecting anything -- there is no account to protect yet.
 
     Args:
         response: The response to clear the session cookie on.
+        session: The database session.
+        rendercv_session: The raw session cookie, if the client sent one.
     """
     response.delete_cookie(SESSION_COOKIE_NAME)
+
+    token = (
+        decode_cookie(rendercv_session, resolve_secret()) if rendercv_session else None
+    )
+    user = repository.get_user_by_token(session, token) if token else None
+    if user is not None and user.auth_provider is not None:
+        repository.rotate_session_token(session, user, generate_session_token())

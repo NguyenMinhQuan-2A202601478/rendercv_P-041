@@ -503,6 +503,7 @@ def get_user_by_auth_identity(
 def promote_user_to_account(
     session: Session,
     user: User,
+    new_session_token: str,
     auth_provider: str,
     auth_provider_id: str,
     email: str | None,
@@ -520,6 +521,9 @@ def promote_user_to_account(
     Args:
         session: The database session.
         user: The anonymous row identified by the caller's session cookie.
+        new_session_token: Replacement token. The row's current one existed
+            before this user authenticated, so it must not survive into the
+            account -- see `rotate_session_token`.
         auth_provider: Provider key, e.g. `"google"`.
         auth_provider_id: The provider's stable subject id.
         email: The account's email, if the provider supplied one.
@@ -528,6 +532,7 @@ def promote_user_to_account(
     Returns:
         The same row, now carrying the account identity.
     """
+    user.session_token = new_session_token
     user.auth_provider = auth_provider
     user.auth_provider_id = auth_provider_id
     user.email = email
@@ -600,3 +605,89 @@ def claim_anonymous_user(
     session.commit()
     session.refresh(account_user)
     return account_user
+
+
+def get_user_by_token(session: Session, session_token: str) -> User | None:
+    """Look up a session's user without creating one.
+
+    Why this exists next to `get_or_create_user_by_token`: endpoints that
+    merely *report* on the session (`GET /api/auth/me`) must not bring a
+    user row into existence. The landing page asks that question on every
+    visit, so creating there would mint a row and a year-long cookie for
+    every crawler and link preview that touches the front page.
+
+    Args:
+        session: The database session.
+        session_token: The opaque token from the client's session cookie.
+
+    Returns:
+        The matching `User`, or None if the token belongs to no row.
+    """
+    return session.execute(
+        select(User).where(User.session_token == session_token)
+    ).scalar_one_or_none()
+
+
+def create_account_user(
+    session: Session,
+    session_token: str,
+    auth_provider: str,
+    auth_provider_id: str,
+    email: str | None,
+    display_name: str | None,
+) -> User:
+    """Create a brand-new row for an account, owning nothing yet.
+
+    Why:
+        Used when someone already signed in switches to a different
+        provider identity. Their current row belongs to the account they
+        were signed into and must not be rewritten, so the incoming
+        identity gets a row of its own.
+
+    Args:
+        session: The database session.
+        session_token: The token the new session's cookie will carry.
+        auth_provider: Provider key, e.g. `"google"`.
+        auth_provider_id: The provider's stable subject id.
+        email: The account's email, if the provider supplied one.
+        display_name: The account's display name, if supplied.
+
+    Returns:
+        The newly created account row.
+    """
+    user = User(
+        session_token=session_token,
+        created_at=utc_now(),
+        auth_provider=auth_provider,
+        auth_provider_id=auth_provider_id,
+        email=email,
+        display_name=display_name,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def rotate_session_token(session: Session, user: User, new_session_token: str) -> User:
+    """Replace a row's session token, invalidating every cookie carrying the old one.
+
+    Why:
+        Two things need this. Signing in must not keep a token that existed
+        before authentication -- whoever used the browser first may know it,
+        and it would otherwise stay valid against the account for a year
+        (session fixation). Signing out must actually revoke, or the control
+        promises something it does not do.
+
+    Args:
+        session: The database session.
+        user: The row whose token is being replaced.
+        new_session_token: The replacement token.
+
+    Returns:
+        The same row, carrying the new token.
+    """
+    user.session_token = new_session_token
+    session.commit()
+    session.refresh(user)
+    return user

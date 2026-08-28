@@ -5,7 +5,7 @@ Why:
     (guardrail: never touch a real or shared database) with `get_session`
     overridden so requests hit that file directly. Entering the app via
     `with TestClient(app) as client:` also exercises the real startup path
-    (`db.migrate.upgrade_to_head`, docs/plans/active/cv-editor-web-app.md,
+    (`db.migrate.upgrade_to_head`, docs/plans/completed/cv-editor-web-app.md,
     Phase 4) instead of a shortcut like `Base.metadata.create_all`, so the
     "uvicorn just works against a brand-new DB" guarantee is covered by the
     same tests as the endpoints themselves.

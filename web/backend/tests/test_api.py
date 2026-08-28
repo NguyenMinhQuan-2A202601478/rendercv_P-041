@@ -3,7 +3,7 @@
 Why:
     Each endpoint (validate/render/schema/themes) is exercised for its happy
     path, its error classes, the size cap, and the render cache, per
-    `docs/plans/active/cv-editor-web-app.md` (Phase 0) and the
+    `docs/plans/completed/cv-editor-web-app.md` (Phase 0) and the
     api-implementation skill.
 """
 

@@ -4,7 +4,7 @@ Why:
     Typst compilation is expensive; identical (cv, design, locale, settings)
     documents should not be recompiled on every request. Guardrails pattern:
     "cache renders by (yaml-hash, theme)". A small in-memory dict is enough
-    for the Phase 0 scaffold (docs/plans/active/cv-editor-web-app.md);
+    for the Phase 0 scaffold (docs/plans/completed/cv-editor-web-app.md);
     persistence-backed caching can replace this in a later phase.
 """
 

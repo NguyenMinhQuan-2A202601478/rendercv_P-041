@@ -1,7 +1,7 @@
 """create baseline schema
 
 Why:
-    Phase 4a of the web editor plan (docs/plans/active/cv-editor-web-app.md):
+    Phase 4a of the web editor plan (docs/plans/completed/cv-editor-web-app.md):
     the four baseline tables backing anonymous-session accounts, multi-CV
     storage, autosave version history, and UI preferences. See
     `rendercv_web.db.models` for the column-by-column rationale and

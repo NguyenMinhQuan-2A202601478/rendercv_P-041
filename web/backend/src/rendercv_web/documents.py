@@ -9,7 +9,7 @@ Why:
     adds a second ruamel.yaml instance with the *same* read semantics plus
     `preserve_quotes=True` so a document can also be dumped back out
     byte-identical except for the edits actually requested
-    (docs/plans/active/cv-editor-web-app.md, Phase 2).
+    (docs/plans/completed/cv-editor-web-app.md, Phase 2).
 """
 
 import io

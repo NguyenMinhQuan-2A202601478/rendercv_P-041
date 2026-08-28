@@ -4,7 +4,7 @@ Why:
     Isolates SQLAlchemy engine/session wiring, ORM models, and the
     repository functions the Phase 4b endpoints call, so the API layer
     never writes raw SQL and never guesses at the schema (see
-    docs/plans/active/cv-editor-web-app.md, Phase 4, and the
+    docs/plans/completed/cv-editor-web-app.md, Phase 4, and the
     `schema-design` skill).
 """
 

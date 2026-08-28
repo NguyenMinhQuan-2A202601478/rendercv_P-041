@@ -248,7 +248,7 @@ vết duy nhất là lỗi CORS trong console.
 
 ## Đọc tiếp ở đâu
 
-- `docs/plans/active/cv-editor-web-app.md` -- kế hoạch thực thi, kèm bằng
+- `docs/plans/completed/cv-editor-web-app.md` -- kế hoạch thực thi, kèm bằng
   chứng kiểm chứng của từng phase.
 - `graphify-out/GRAPH_REPORT.md` -- bản đồ sinh tự động về cách core và các
   tầng web kết nối với nhau.

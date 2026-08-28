@@ -13,7 +13,7 @@ Rules:
 2. The repository is the system of record (`docs/WORKFLOW.md`):
    - lasting decisions → `docs/decisions/` using `docs/templates/decision.md`;
    - progress and task-local decisions → the active plan
-     (`docs/plans/active/cv-editor-web-app.md`), same file, no parallel logs;
+     (`docs/plans/completed/cv-editor-web-app.md`), same file, no parallel logs;
    - API contracts → `web/backend/README.md` (method, path, shapes, errors);
    - runbooks (how to start/dev/deploy the app) →
      `docs/templates/application-runbook.md` structure.

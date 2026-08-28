@@ -3,7 +3,7 @@
 Why:
     Phase 0 of the web editor plan: the backend wraps validation and
     rendering from `rendercv` without reimplementing any of it (see
-    docs/plans/active/cv-editor-web-app.md, Approach > Phase 0).
+    docs/plans/completed/cv-editor-web-app.md, Approach > Phase 0).
 """
 
 import concurrent.futures
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Why:
         The dev-DB creation path approved in the plan
-        (docs/plans/active/cv-editor-web-app.md, Phase 4): `uvicorn` must
+        (docs/plans/completed/cv-editor-web-app.md, Phase 4): `uvicorn` must
         start cleanly against a brand-new or behind-head database with no
         manual `alembic upgrade head` step. `upgrade_to_head` is idempotent
         (see `db/migrate.py`), so this runs the same way on every startup

@@ -3,7 +3,7 @@ import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
  * End-to-end coverage for Phase 4c: the real sidebar, autosave, and reload
- * persistence (docs/plans/active/cv-editor-web-app.md, Phase 4). Requires
+ * persistence (docs/plans/completed/cv-editor-web-app.md, Phase 4). Requires
  * the FastAPI backend running on :8000 with a throwaway database -- see the
  * phase task for how this file's runner starts it.
  *

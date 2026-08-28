@@ -67,7 +67,7 @@ function documentsEqual(a: CvDocuments, b: CvDocuments): boolean {
  * `PUT /api/cvs/{id}`: debounced (1500ms), serialized (never two in-flight;
  * a trailing edit during a save re-queues itself), with 409-conflict
  * reconciliation and a single automatic retry on failure before surfacing
- * an error (docs/plans/active/cv-editor-web-app.md, Phase 4c).
+ * an error (docs/plans/completed/cv-editor-web-app.md, Phase 4c).
  *
  * Why a standalone controller (same pattern as `renderController` /
  * `validateController` / `formSync`): every side effect (network, timers)

@@ -1,7 +1,7 @@
 """Anonymous device-session identity: a signed cookie backs an implicit account.
 
 Why:
-    Phase 4b (auth model option A, docs/plans/active/cv-editor-web-app.md):
+    Phase 4b (auth model option A, docs/plans/completed/cv-editor-web-app.md):
     there is no email/password/OAuth yet -- a signed, HTTPOnly cookie's
     *token* is the only thing that identifies a `User` row. Signing (HMAC-
     SHA256 over the token with a server secret) means a client cannot forge

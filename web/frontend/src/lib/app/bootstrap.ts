@@ -2,7 +2,7 @@ import type { CvDetail, CvSummary } from '$lib/api/cvs';
 
 /**
  * Picks which CV to open on load, from the saved-CVs list and the
- * `last_cv_id` preference (docs/plans/active/cv-editor-web-app.md, Phase 4).
+ * `last_cv_id` preference (docs/plans/completed/cv-editor-web-app.md, Phase 4).
  *
  * Why a standalone pure function: unit-testable without a network or store
  * mounted (`bootstrap.test.ts`) -- the only actual decision logic in an

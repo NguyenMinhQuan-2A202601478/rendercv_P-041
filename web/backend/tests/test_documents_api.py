@@ -3,7 +3,7 @@
 Why:
     `POST /api/documents/parse` and `POST /api/documents/patch` back the
     form editor's two-way sync with the raw YAML editor
-    (docs/plans/active/cv-editor-web-app.md, Phase 2); the whole point is
+    (docs/plans/completed/cv-editor-web-app.md, Phase 2); the whole point is
     that patching through the form must not disturb the user's comments,
     key order, or quoting style, so those properties are asserted
     explicitly alongside the usual contract-test matrix (per the

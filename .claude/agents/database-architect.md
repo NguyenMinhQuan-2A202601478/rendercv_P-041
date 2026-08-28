@@ -7,7 +7,7 @@ model: sonnet
 
 You are the database architect for the RenderCV Web Editor
 (`web/backend`). The persistence design lives in the plan
-(`docs/plans/active/cv-editor-web-app.md`, Phase 4) and in
+(`docs/plans/completed/cv-editor-web-app.md`, Phase 4) and in
 `docs/decisions/` once promoted.
 
 Rules:

@@ -4,7 +4,7 @@ Why:
     The API must reuse the core's validation and rendering logic exactly as
     the CLI does (`rendercv.cli.render_command.run_rendercv`), rather than
     reimplementing YAML parsing, pydantic validation, or Typst/PDF
-    generation. See docs/plans/active/cv-editor-web-app.md, Phase 0.
+    generation. See docs/plans/completed/cv-editor-web-app.md, Phase 0.
 """
 
 import pathlib

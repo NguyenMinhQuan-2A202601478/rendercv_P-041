@@ -76,16 +76,20 @@ def git_blob_reader(repository: Path) -> Callable[[str, str], bytes]:
     return read_blob
 
 
-def exact_source_bytes(blob: bytes, start_line: int, end_line: int, context: str) -> bytes:
+def exact_source_bytes(
+    blob: bytes, start_line: int, end_line: int, context: str
+) -> bytes:
     lines = blob.splitlines(keepends=True)
     require(start_line > 0, f"{context}.start_line must be positive")
     require(end_line >= start_line, f"{context}.end_line precedes start_line")
     require(end_line <= len(lines), f"{context}: source range exceeds file length")
-    return b"".join(lines[start_line - 1:end_line])
+    return b"".join(lines[start_line - 1 : end_line])
 
 
 def validate_boundary(boundary: Any) -> list[dict[str, Any]]:
-    require(isinstance(boundary, list) and boundary, "boundary must be a non-empty array")
+    require(
+        isinstance(boundary, list) and boundary, "boundary must be a non-empty array"
+    )
     kinds: set[str] = set()
     ids: set[str] = set()
     for index, row in enumerate(boundary):
@@ -93,30 +97,59 @@ def validate_boundary(boundary: Any) -> list[dict[str, Any]]:
         require(isinstance(row, dict), f"{context}: expected object")
         require_exact_keys(
             row,
-            {"id", "kind", "initial_evidence_sha256", "final_evidence_sha256", "result", "notes"},
+            {
+                "id",
+                "kind",
+                "initial_evidence_sha256",
+                "final_evidence_sha256",
+                "result",
+                "notes",
+            },
             context,
         )
-        require(isinstance(row["id"], str) and ID_RE.fullmatch(row["id"]) is not None,
-                f"{context}.id is invalid")
+        require(
+            isinstance(row["id"], str) and ID_RE.fullmatch(row["id"]) is not None,
+            f"{context}.id is invalid",
+        )
         require(row["id"] not in ids, f"{context}.id is duplicated")
         ids.add(row["id"])
         require(row["kind"] in BOUNDARY_KINDS, f"{context}.kind is unsupported")
         kinds.add(row["kind"])
         require(row["result"] in BOUNDARY_RESULTS, f"{context}.result is unsupported")
-        require_sha(row["initial_evidence_sha256"], f"{context}.initial_evidence_sha256", nullable=True)
-        require_sha(row["final_evidence_sha256"], f"{context}.final_evidence_sha256", nullable=True)
-        require(isinstance(row["notes"], list) and all(isinstance(note, str) for note in row["notes"]),
-                f"{context}.notes must be a string array")
+        require_sha(
+            row["initial_evidence_sha256"],
+            f"{context}.initial_evidence_sha256",
+            nullable=True,
+        )
+        require_sha(
+            row["final_evidence_sha256"],
+            f"{context}.final_evidence_sha256",
+            nullable=True,
+        )
+        require(
+            isinstance(row["notes"], list)
+            and all(isinstance(note, str) for note in row["notes"]),
+            f"{context}.notes must be a string array",
+        )
         if row["result"] == "Pass":
-            require(row["initial_evidence_sha256"] is not None,
-                    f"{context}: Pass requires initial evidence")
-            require(row["initial_evidence_sha256"] == row["final_evidence_sha256"],
-                    f"{context}: Pass requires equal evidence hashes")
+            require(
+                row["initial_evidence_sha256"] is not None,
+                f"{context}: Pass requires initial evidence",
+            )
+            require(
+                row["initial_evidence_sha256"] == row["final_evidence_sha256"],
+                f"{context}: Pass requires equal evidence hashes",
+            )
         if row["result"] == "Fail":
-            require(row["initial_evidence_sha256"] is not None and row["final_evidence_sha256"] is not None,
-                    f"{context}: Fail requires both evidence hashes")
-            require(row["initial_evidence_sha256"] != row["final_evidence_sha256"],
-                    f"{context}: Fail requires different evidence hashes")
+            require(
+                row["initial_evidence_sha256"] is not None
+                and row["final_evidence_sha256"] is not None,
+                f"{context}: Fail requires both evidence hashes",
+            )
+            require(
+                row["initial_evidence_sha256"] != row["final_evidence_sha256"],
+                f"{context}: Fail requires different evidence hashes",
+            )
     require(kinds == BOUNDARY_KINDS, "boundary must cover all four required kinds")
     return boundary
 
@@ -132,51 +165,81 @@ def build_bundle(
 ) -> tuple[str, str]:
     require_exact_keys(spec, {"boundary", "claims", "hunks", "limitations"}, "spec")
     require(root.startswith("/"), "repository root must be absolute")
-    require(REVISION_RE.fullmatch(revision) is not None, "revision must be 40 lowercase hex characters")
+    require(
+        REVISION_RE.fullmatch(revision) is not None,
+        "revision must be 40 lowercase hex characters",
+    )
     require(branch != "", "branch must not be empty")
     require_relative_path(producer_skill_path, "producer_skill_path")
     producer_blob = read_blob(revision, producer_skill_path)
 
     claims_input = spec["claims"]
-    require(isinstance(claims_input, list) and claims_input, "claims must be a non-empty array")
+    require(
+        isinstance(claims_input, list) and claims_input,
+        "claims must be a non-empty array",
+    )
     claims: list[dict[str, Any]] = []
     claim_ids: set[str] = set()
     claims_by_hunk: dict[str, list[str]] = {}
     for index, claim in enumerate(claims_input):
         context = f"claims[{index}]"
         require(isinstance(claim, dict), f"{context}: expected object")
-        require_exact_keys(claim, {"id", "hunk_id", "text", "classification", "sources"}, context)
+        require_exact_keys(
+            claim, {"id", "hunk_id", "text", "classification", "sources"}, context
+        )
         claim_id = claim["id"]
         hunk_id = claim["hunk_id"]
-        require(isinstance(claim_id, str) and ID_RE.fullmatch(claim_id) is not None,
-                f"{context}.id is invalid")
+        require(
+            isinstance(claim_id, str) and ID_RE.fullmatch(claim_id) is not None,
+            f"{context}.id is invalid",
+        )
         require(claim_id not in claim_ids, f"{context}.id is duplicated")
         claim_ids.add(claim_id)
-        require(isinstance(hunk_id, str) and ID_RE.fullmatch(hunk_id) is not None,
-                f"{context}.hunk_id is invalid")
-        require(isinstance(claim["text"], str) and claim["text"].strip() == claim["text"]
-                and claim["text"] != "" and "\n" not in claim["text"],
-                f"{context}.text must be one trimmed non-empty line")
-        require(claim["classification"] in CLASSIFICATIONS,
-                f"{context}.classification is unsupported")
+        require(
+            isinstance(hunk_id, str) and ID_RE.fullmatch(hunk_id) is not None,
+            f"{context}.hunk_id is invalid",
+        )
+        require(
+            isinstance(claim["text"], str)
+            and claim["text"].strip() == claim["text"]
+            and claim["text"] != ""
+            and "\n" not in claim["text"],
+            f"{context}.text must be one trimmed non-empty line",
+        )
+        require(
+            claim["classification"] in CLASSIFICATIONS,
+            f"{context}.classification is unsupported",
+        )
         sources_input = claim["sources"]
-        require(isinstance(sources_input, list) and sources_input,
-                f"{context}.sources must be a non-empty array")
+        require(
+            isinstance(sources_input, list) and sources_input,
+            f"{context}.sources must be a non-empty array",
+        )
         sources: list[dict[str, Any]] = []
         for source_index, source in enumerate(sources_input):
             source_context = f"{context}.sources[{source_index}]"
             require(isinstance(source, dict), f"{source_context}: expected object")
             allowed = {"path", "start_line", "end_line", "role", "revision"}
             require(set(source) <= allowed, f"{source_context}: unsupported keys")
-            require({"path", "start_line", "end_line", "role"} <= set(source),
-                    f"{source_context}: missing required keys")
+            require(
+                {"path", "start_line", "end_line", "role"} <= set(source),
+                f"{source_context}: missing required keys",
+            )
             source_revision = source.get("revision", revision)
-            require(isinstance(source_revision, str) and REVISION_RE.fullmatch(source_revision) is not None,
-                    f"{source_context}.revision is invalid")
+            require(
+                isinstance(source_revision, str)
+                and REVISION_RE.fullmatch(source_revision) is not None,
+                f"{source_context}.revision is invalid",
+            )
             require_relative_path(source["path"], f"{source_context}.path")
-            require(isinstance(source["start_line"], int) and isinstance(source["end_line"], int),
-                    f"{source_context}: line bounds must be integers")
-            require(source["role"] in SOURCE_ROLES, f"{source_context}.role is unsupported")
+            require(
+                isinstance(source["start_line"], int)
+                and isinstance(source["end_line"], int),
+                f"{source_context}: line bounds must be integers",
+            )
+            require(
+                source["role"] in SOURCE_ROLES, f"{source_context}.role is unsupported"
+            )
             source_bytes = exact_source_bytes(
                 read_blob(source_revision, source["path"]),
                 source["start_line"],
@@ -205,24 +268,35 @@ def build_bundle(
         claims_by_hunk.setdefault(hunk_id, []).append(claim_id)
 
     hunks_input = spec["hunks"]
-    require(isinstance(hunks_input, list) and hunks_input, "hunks must be a non-empty array")
+    require(
+        isinstance(hunks_input, list) and hunks_input, "hunks must be a non-empty array"
+    )
     hunks: list[dict[str, Any]] = []
     patch_blocks: list[str] = []
     hunk_ids: set[str] = set()
     for index, hunk in enumerate(hunks_input):
         context = f"hunks[{index}]"
         require(isinstance(hunk, dict), f"{context}: expected object")
-        require_exact_keys(hunk, {"id", "destination", "after_text", "unknowns"}, context)
+        require_exact_keys(
+            hunk, {"id", "destination", "after_text", "unknowns"}, context
+        )
         hunk_id = hunk["id"]
-        require(isinstance(hunk_id, str) and ID_RE.fullmatch(hunk_id) is not None,
-                f"{context}.id is invalid")
+        require(
+            isinstance(hunk_id, str) and ID_RE.fullmatch(hunk_id) is not None,
+            f"{context}.id is invalid",
+        )
         require(hunk_id not in hunk_ids, f"{context}.id is duplicated")
         hunk_ids.add(hunk_id)
         require_relative_path(hunk["destination"], f"{context}.destination")
-        require(isinstance(hunk["after_text"], str), f"{context}.after_text must be a string")
-        require(isinstance(hunk["unknowns"], list)
-                and all(isinstance(item, str) for item in hunk["unknowns"]),
-                f"{context}.unknowns must be a string array")
+        require(
+            isinstance(hunk["after_text"], str),
+            f"{context}.after_text must be a string",
+        )
+        require(
+            isinstance(hunk["unknowns"], list)
+            and all(isinstance(item, str) for item in hunk["unknowns"]),
+            f"{context}.unknowns must be a string array",
+        )
         require(hunk_id in claims_by_hunk, f"{context}: no claims reference this hunk")
         before = read_blob(revision, hunk["destination"])
         after = hunk["after_text"].encode("utf-8")
@@ -243,10 +317,16 @@ def build_bundle(
                 "unknowns": hunk["unknowns"],
             }
         )
-    require(set(claims_by_hunk) == hunk_ids, "every claim hunk_id must identify an emitted hunk")
+    require(
+        set(claims_by_hunk) == hunk_ids,
+        "every claim hunk_id must identify an emitted hunk",
+    )
     limitations = spec["limitations"]
-    require(isinstance(limitations, list) and all(isinstance(item, str) for item in limitations),
-            "limitations must be a string array")
+    require(
+        isinstance(limitations, list)
+        and all(isinstance(item, str) for item in limitations),
+        "limitations must be a string array",
+    )
 
     capsule = {
         "schema": SCHEMA,
@@ -297,14 +377,38 @@ def self_test() -> None:
             raise BundleError(f"missing self-test blob: {path}") from exc
 
     boundary = [
-        {"id": "B1", "kind": "git", "initial_evidence_sha256": zeros,
-         "final_evidence_sha256": zeros, "result": "Pass", "notes": []},
-        {"id": "B2", "kind": "ignored_or_managed", "initial_evidence_sha256": None,
-         "final_evidence_sha256": None, "result": "Unknown", "notes": ["not observed"]},
-        {"id": "B3", "kind": "runtime", "initial_evidence_sha256": None,
-         "final_evidence_sha256": None, "result": "Unknown", "notes": ["not observable"]},
-        {"id": "B4", "kind": "temporary_paths", "initial_evidence_sha256": zeros,
-         "final_evidence_sha256": zeros, "result": "Pass", "notes": []},
+        {
+            "id": "B1",
+            "kind": "git",
+            "initial_evidence_sha256": zeros,
+            "final_evidence_sha256": zeros,
+            "result": "Pass",
+            "notes": [],
+        },
+        {
+            "id": "B2",
+            "kind": "ignored_or_managed",
+            "initial_evidence_sha256": None,
+            "final_evidence_sha256": None,
+            "result": "Unknown",
+            "notes": ["not observed"],
+        },
+        {
+            "id": "B3",
+            "kind": "runtime",
+            "initial_evidence_sha256": None,
+            "final_evidence_sha256": None,
+            "result": "Unknown",
+            "notes": ["not observable"],
+        },
+        {
+            "id": "B4",
+            "kind": "temporary_paths",
+            "initial_evidence_sha256": zeros,
+            "final_evidence_sha256": zeros,
+            "result": "Pass",
+            "notes": [],
+        },
     ]
     spec = {
         "boundary": boundary,
@@ -315,12 +419,22 @@ def self_test() -> None:
                 "text": "Use new guidance.",
                 "classification": "Authoritative",
                 "sources": [
-                    {"path": "docs/source.md", "start_line": 1, "end_line": 1, "role": "authority"}
+                    {
+                        "path": "docs/source.md",
+                        "start_line": 1,
+                        "end_line": 1,
+                        "role": "authority",
+                    }
                 ],
             }
         ],
         "hunks": [
-            {"id": "H1", "destination": "docs/test.md", "after_text": "new\n", "unknowns": []}
+            {
+                "id": "H1",
+                "destination": "docs/test.md",
+                "after_text": "new\n",
+                "unknowns": [],
+            }
         ],
         "limitations": ["self-test"],
     }
@@ -334,10 +448,17 @@ def self_test() -> None:
     )
     header = f"<!-- ONBOARDING_EVIDENCE_BUNDLE_V2:BEGIN sha256={digest} -->\n"
     require(bundle.startswith(header), "self-test bundle header is invalid")
-    inner = bundle[len(header):-len(BUNDLE_END + "\n")]
-    require(sha256_bytes(inner.encode("utf-8")) == digest, "self-test bundle digest is invalid")
-    require(sha256_bytes(b"authority\n") in bundle, "self-test source hash was not computed")
-    require("<!-- ONBOARDING_PATCH:H1:BEGIN -->" in bundle, "self-test patch is missing")
+    inner = bundle[len(header) : -len(BUNDLE_END + "\n")]
+    require(
+        sha256_bytes(inner.encode("utf-8")) == digest,
+        "self-test bundle digest is invalid",
+    )
+    require(
+        sha256_bytes(b"authority\n") in bundle, "self-test source hash was not computed"
+    )
+    require(
+        "<!-- ONBOARDING_PATCH:H1:BEGIN -->" in bundle, "self-test patch is missing"
+    )
 
 
 def main() -> int:
@@ -370,8 +491,10 @@ def main() -> int:
             text=True,
         )
         require(root_result.returncode == 0, "repository is not a Git worktree")
-        require(Path(root_result.stdout.strip()).resolve() == repository,
-                "repository must be the Git worktree root")
+        require(
+            Path(root_result.stdout.strip()).resolve() == repository,
+            "repository must be the Git worktree root",
+        )
         bundle, _ = build_bundle(
             spec=spec,
             root=str(repository),
@@ -383,7 +506,10 @@ def main() -> int:
         sys.stdout.write(bundle)
         return 0
     except (BundleError, RenderError, json.JSONDecodeError, OSError) as exc:
-        print(json.dumps({"error": str(exc), "valid": False}, sort_keys=True), file=sys.stderr)
+        print(
+            json.dumps({"error": str(exc), "valid": False}, sort_keys=True),
+            file=sys.stderr,
+        )
         return 1
 
 

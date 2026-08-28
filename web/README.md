@@ -1,30 +1,31 @@
 # RenderCV Web Editor
 
-A browser editor for RenderCV: a three-pane UI (CV list, editor, live PDF
-preview) where a CV is edited through four tabs -- **CV, Design, Locale,
-Settings** -- each in two synchronized modes (schema-driven form or raw
-YAML), with a theme switcher, autosave, and PDF download.
+Trình soạn CV chạy trên trình duyệt cho RenderCV: giao diện ba khung (danh
+sách CV, khung soạn thảo, xem trước PDF trực tiếp), trong đó mỗi CV được
+chỉnh qua bốn tab -- **CV, Design, Locale, Settings** -- mỗi tab có hai chế
+độ đồng bộ hai chiều (form sinh từ schema, hoặc YAML thô), kèm bộ đổi theme,
+tự động lưu, và tải PDF.
 
-It is built **on top of this repository's Python core**, not as a
-reimplementation: `web/backend` imports `rendercv` as an editable
-dependency and calls the same pipeline the CLI does, so rendering and
-validation cannot drift from the core.
+Ứng dụng được xây **trên chính core Python của repository này**, không viết
+lại: `web/backend` import `rendercv` dưới dạng editable dependency và gọi
+đúng pipeline mà CLI dùng, nên phần render và validate không thể lệch khỏi
+core.
 
 ```
-web/backend    FastAPI service wrapping the core (validate, render,
-               schema, themes, CV persistence, preferences)
-web/frontend   SvelteKit + TypeScript + Tailwind UI
+web/backend    Dịch vụ FastAPI bọc core (validate, render, schema,
+               themes, lưu trữ CV, preferences)
+web/frontend   Giao diện SvelteKit + TypeScript + Tailwind
 ```
 
-## Prerequisites
+## Yêu cầu môi trường
 
-- **uv** (Python 3.12+) -- used for everything Python; never `pip` or a
-  bare `python`.
-- **Node.js 20+** with npm.
+- **uv** (Python 3.12+) -- dùng cho mọi thứ liên quan Python; tuyệt đối
+  không dùng `pip` hay gọi `python` trực tiếp.
+- **Node.js 20+** kèm npm.
 
-## Setup
+## Cài đặt
 
-Install both workspaces once:
+Cài một lần cho cả hai workspace:
 
 ```
 cd web/backend
@@ -34,12 +35,12 @@ cd ../frontend
 npm install
 ```
 
-The backend depends on the core at the repository root as an *editable*
-path dependency, so core edits take effect without reinstalling.
+Backend phụ thuộc vào core ở thư mục gốc repository dưới dạng *editable*
+path dependency, nên sửa core là có hiệu lực ngay, không cần cài lại.
 
-## Running the app
+## Chạy ứng dụng
 
-Two processes, in two terminals:
+Hai tiến trình, ở hai terminal:
 
 ```
 cd web/backend
@@ -51,30 +52,30 @@ cd web/frontend
 npm run dev
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api` to the
-backend on port 8000, so both must be running.
+Mở <http://localhost:5173>. Dev server của Vite proxy `/api` sang backend ở
+cổng 8000, nên **cả hai đều phải đang chạy**.
 
-The database schema is migrated **automatically on backend startup**
-(`upgrade_to_head` in the app's lifespan) -- there is no manual
-`alembic upgrade` step. With no configuration, the backend creates
-`web/backend/data/rendercv_web.db` (SQLite) relative to its working
-directory.
+Schema database được migrate **tự động khi backend khởi động**
+(`upgrade_to_head` trong lifespan của app) -- không có bước
+`alembic upgrade` thủ công. Nếu không cấu hình gì, backend tạo file
+`web/backend/data/rendercv_web.db` (SQLite) tương đối theo thư mục làm việc
+hiện tại.
 
-There is no login: a signed cookie gives each browser an anonymous
-session, and CVs belong to that session.
+Ứng dụng không có đăng nhập: một cookie đã ký cấp cho mỗi trình duyệt một
+phiên ẩn danh, và các CV thuộc về phiên đó.
 
-## Configuration
+## Cấu hình
 
-| Variable | Default | Notes |
+| Biến môi trường | Mặc định | Ghi chú |
 | --- | --- | --- |
-| `RENDERCV_WEB_DATABASE_URL` | `sqlite:///./data/rendercv_web.db` | Any SQLAlchemy URL. Postgres works unmodified. |
-| `RENDERCV_WEB_SECRET` | *(insecure dev default)* | Signs session cookies. **Must be set before any deployment** -- see below. |
+| `RENDERCV_WEB_DATABASE_URL` | `sqlite:///./data/rendercv_web.db` | Nhận mọi URL kiểu SQLAlchemy. Postgres chạy được mà không cần sửa code. |
+| `RENDERCV_WEB_SECRET` | *(giá trị dev không an toàn)* | Dùng để ký cookie phiên. **Bắt buộc phải đặt trước khi deploy** -- xem mục cuối. |
 
-## Tests
+## Kiểm thử
 
-Each layer has its own gate. All of them should be green before a PR.
+Mỗi tầng có gate riêng. Tất cả phải xanh trước khi mở PR.
 
-**Core** (from the repository root):
+**Core** (chạy từ thư mục gốc repository):
 
 ```
 just check
@@ -88,7 +89,7 @@ cd web/backend
 uv run pytest -q
 ```
 
-**Frontend** (type-check, unit tests, production build):
+**Frontend** (kiểm tra kiểu, unit test, build production):
 
 ```
 cd web/frontend
@@ -97,14 +98,14 @@ npm run test
 npm run build
 ```
 
-**End-to-end (Playwright).** These drive a real browser against a real
-backend, so the backend must be running -- and this is the one place
-where a mistake costs you data:
+**End-to-end (Playwright).** Bộ test này điều khiển trình duyệt thật, gọi
+vào backend thật, nên backend phải đang chạy -- và đây là chỗ duy nhất mà
+làm sai sẽ mất dữ liệu:
 
-> **Always point the e2e backend at a throwaway database.** Running the
-> suite against the default `web/backend/data/rendercv_web.db` writes
-> test CVs into your development data and makes the bootstrap-ordering
-> tests flake.
+> **Luôn trỏ backend của e2e vào một database dùng-một-lần.** Chạy bộ test
+> vào `web/backend/data/rendercv_web.db` mặc định sẽ ghi CV test vào dữ liệu
+> phát triển của bạn, đồng thời làm các test phụ thuộc thứ tự bootstrap
+> chập chờn.
 
 PowerShell:
 
@@ -114,60 +115,60 @@ cd web/backend
 uv run uvicorn rendercv_web.app:app --port 8000
 ```
 
-Then, in another terminal:
+Rồi ở terminal khác:
 
 ```
 cd web/frontend
 npm run test:e2e
 ```
 
-Playwright starts its **own** frontend on port 5199 (not 5173), so it
-never fights a dev server you already have open. It runs with
-`workers: 1` deliberately: the dev backend is a single uvicorn process
-whose CPU-bound Typst renders stall its own event loop under parallel
-load.
+Playwright tự dựng frontend **riêng** ở cổng 5199 (không phải 5173) nên
+không tranh cổng với dev server bạn đang mở. Nó chạy `workers: 1` một cách
+có chủ đích: backend dev chỉ là một tiến trình uvicorn duy nhất, và các lần
+render Typst nặng CPU sẽ làm nghẽn chính event loop của nó khi chạy song
+song.
 
-## Optional: client-side (WASM) preview
+## Tuỳ chọn: xem trước phía client (WASM)
 
-The preview is normally rendered by the backend, which stays the
-canonical renderer. There is also a fully client-side path -- Pyodide
-runs the rendercv wheel to produce Typst source, and typst.ts compiles
-it to a PDF in the browser with zero `/api/render` calls.
+Bình thường bản xem trước do backend render, và đó vẫn là bộ render chuẩn.
+Ngoài ra còn một đường chạy hoàn toàn phía client: Pyodide chạy wheel
+rendercv để sinh mã nguồn Typst, rồi typst.ts biên dịch ra PDF ngay trong
+trình duyệt, không gọi `/api/render` lần nào.
 
-It is **off by default** and costs nothing until enabled. To try it,
-build the assets once (~30 MB into the gitignored `static/wasm/`):
+Tính năng này **mặc định tắt** và không tốn gì cho tới khi được bật. Muốn
+thử, build assets một lần (~30 MB, đổ vào `static/wasm/` đã được gitignore):
 
 ```
 cd web/frontend
 npm run build:wasm-assets
 ```
 
-Then set the flag in the browser console and reload:
+Rồi bật cờ trong console của trình duyệt và tải lại trang:
 
 ```
 localStorage.setItem('rendercv.wasmPreview', 'true')
 ```
 
-Known limits: classic-theme fonts only, Pyodide itself is fetched from
-the jsdelivr CDN, and a few small pure-Python dependencies come from
-PyPI at runtime. Cold start is roughly 17-20s; warm renders are well
-under a second.
+Giới hạn đã biết: chỉ có font của theme classic, bản thân Pyodide được tải
+từ CDN jsdelivr, và vài dependency Python thuần nhỏ được lấy từ PyPI lúc
+chạy. Khởi động nguội mất khoảng 17-20 giây; các lần render sau khi đã nóng
+máy dưới một giây.
 
-## Before deploying
+## Trước khi deploy
 
-- **Set `RENDERCV_WEB_SECRET`** to a long random value kept out of
-  source control. The fallback is a hardcoded string committed to a
-  public repository -- anyone can forge a validly-signed session cookie
-  against it. The backend logs a warning when it is unset, but nothing
-  enforces it.
-- Point `RENDERCV_WEB_DATABASE_URL` at managed Postgres. No code change
-  is needed; migrations run on startup as usual.
+- **Đặt `RENDERCV_WEB_SECRET`** thành một chuỗi ngẫu nhiên đủ dài và giữ
+  ngoài mã nguồn. Giá trị dự phòng là một chuỗi hardcode đã nằm trong một
+  repository công khai -- bất kỳ ai cũng có thể giả mạo cookie phiên có chữ
+  ký hợp lệ dựa vào nó. Backend có ghi cảnh báo khi biến này chưa được đặt,
+  nhưng không có gì cưỡng chế cả.
+- Trỏ `RENDERCV_WEB_DATABASE_URL` sang Postgres có quản lý. Không cần sửa
+  code; migration vẫn chạy lúc khởi động như thường.
 
-## Where to look next
+## Đọc tiếp ở đâu
 
-- `docs/plans/active/cv-editor-web-app.md` -- the execution plan, with
-  each phase's verification evidence.
-- `graphify-out/GRAPH_REPORT.md` -- a generated map of how the core and
-  the web layers connect.
-- The repository root `CLAUDE.md` -- code conventions that govern the
-  Python in `web/backend` as well as the core.
+- `docs/plans/active/cv-editor-web-app.md` -- kế hoạch thực thi, kèm bằng
+  chứng kiểm chứng của từng phase.
+- `graphify-out/GRAPH_REPORT.md` -- bản đồ sinh tự động về cách core và các
+  tầng web kết nối với nhau.
+- `CLAUDE.md` ở thư mục gốc -- quy ước code, áp dụng cho cả Python trong
+  `web/backend` lẫn core.

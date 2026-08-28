@@ -40,12 +40,24 @@ path dependency, nên sửa core là có hiệu lực ngay, không cần cài l�
 
 ## Chạy ứng dụng
 
+Sao chép file mẫu biến môi trường (có thể bỏ qua nếu chỉ chạy ẩn danh trên
+SQLite -- mọi biến đều tuỳ chọn):
+
+```
+cd web/backend
+cp .env.example .env
+```
+
 Hai tiến trình, ở hai terminal:
 
 ```
 cd web/backend
-uv run uvicorn rendercv_web.app:app --port 8000
+uv run --env-file .env uvicorn rendercv_web.app:app --port 8000
 ```
+
+> `--env-file .env` là phần dễ bỏ sót nhất. Thiếu nó thì backend không đọc
+> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`, và giao diện đăng nhập sẽ bị ẩn dù bạn
+> đã điền đúng vào `.env`. Chưa tạo `.env` thì bỏ luôn cờ này đi.
 
 ```
 cd web/frontend
@@ -65,6 +77,12 @@ hiện tại.
 phiên ẩn danh, và các CV thuộc về phiên đó.
 
 ## Cấu hình
+
+Danh sách đầy đủ kèm chú thích nằm trong
+[`web/backend/.env.example`](backend/.env.example) -- copy thành `.env` rồi
+điền. `.env` đã được gitignore; file mẫu thì không, nên đừng bao giờ đặt giá
+trị thật vào đó.
+
 
 | Biến môi trường | Mặc định | Ghi chú |
 | --- | --- | --- |

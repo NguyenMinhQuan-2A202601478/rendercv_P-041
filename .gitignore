@@ -121,7 +121,12 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+# `.env` alone does not cover `.env.local` / `.env.production`, which is how a
+# Google OAuth secret would end up committed to a public repository. The
+# negation keeps a checked-in template possible.
 .env
+.env.*
+!.env.example
 .venv
 .venv*/
 env/

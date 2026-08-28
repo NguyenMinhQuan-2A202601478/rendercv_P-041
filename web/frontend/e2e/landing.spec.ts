@@ -4,27 +4,50 @@ import { test, expect } from '@playwright/test';
  * Phase 5c: the static landing page, served at `/` since Phase 6
  * moved the editor to `/app`.
  *
- * Why this spec never touches the backend (unlike every other `e2e/*.spec.ts`
- * file, which calls `gotoReady`/`firstPreviewUrl` and depends on
- * `/api/cvs`+`/api/render` being reachable): the landing page is a
- * self-contained marketing page with no store, no schema-driven form, and no
- * preview -- it must render fully offline. This test asserts exactly that by
- * failing if any `/api/*` request is observed, instead of waiting on one.
+ * Why this spec is still backend-independent (unlike every other
+ * `e2e/*.spec.ts` file, which calls `gotoReady`/`firstPreviewUrl` and
+ * depends on `/api/cvs`+`/api/render` being reachable): the landing page
+ * has no store, no schema-driven form and no preview, and must render
+ * completely even with the backend down.
+ *
+ * Phase 6 narrowed that from "makes no `/api` request at all" to "makes no
+ * request it needs an answer to". It asks `/api/auth/me` one thing -- may I
+ * offer sign-in? -- and renders everything else regardless of the answer.
+ * The property is therefore asserted the stronger way now: the API is
+ * blocked outright and the page is still expected to come up whole.
  */
 
 test.describe('Landing page (/)', () => {
-	test('renders with no /api requests', async ({ page }) => {
+	test('asks the backend nothing except whether sign-in is available', async ({ page }) => {
 		const apiRequests: string[] = [];
 		page.on('request', (request) => {
-			if (new URL(request.url()).pathname.startsWith('/api')) {
-				apiRequests.push(request.url());
-			}
+			const { pathname } = new URL(request.url());
+			if (pathname.startsWith('/api')) apiRequests.push(pathname);
 		});
 
 		await page.goto('/');
 		await expect(page.getByRole('heading', { level: 1 })).toContainText('YAML-first resume builder');
 
-		expect(apiRequests).toEqual([]);
+		// Polled rather than sampled once: the status request is fired from
+		// `onMount` and deliberately not awaited by anything that renders, so
+		// the heading is on screen before it has even left. No bootstrap, no
+		// render, no schema -- the editor's machinery must stay out of the
+		// landing page.
+		await expect.poll(() => [...new Set(apiRequests)]).toEqual(['/api/auth/me']);
+	});
+
+	test('renders completely with the API unreachable', async ({ page }) => {
+		// The real property behind the request assertion above: nothing on
+		// this page waits on the backend. With /api dead the page must still
+		// come up whole -- just without a sign-in link that could not work.
+		await page.route('**/api/**', (route) => route.abort());
+
+		await page.goto('/');
+
+		await expect(page.getByRole('heading', { level: 1 })).toContainText('YAML-first resume builder');
+		await expect(page.getByRole('link', { name: 'Open the editor' }).first()).toBeVisible();
+		await expect(page.getByRole('list', { name: 'Key features' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
 	});
 
 	test('hero, feature bullets, and CTAs are visible', async ({ page }) => {

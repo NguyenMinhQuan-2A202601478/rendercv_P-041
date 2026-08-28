@@ -5,6 +5,8 @@
 	import type { ActiveCvMeta } from '$lib/stores/cvSession';
 	import { formatRelativeTime } from '$lib/app/relativeTime';
 	import { listVersions, type CvVersionSummary } from '$lib/api/cvs';
+	import type { AuthStatus } from '$lib/api/auth';
+	import AccountMenu from '$lib/components/AccountMenu.svelte';
 
 	let {
 		cvs,
@@ -15,7 +17,9 @@
 		onRename,
 		onDuplicate,
 		onDelete,
-		onRestore
+		onRestore,
+		authStatus,
+		onSignOut
 	}: {
 		cvs: Readable<CvSummary[]>;
 		activeCv: Readable<ActiveCvMeta | null>;
@@ -26,6 +30,8 @@
 		onDuplicate: (id: number) => void;
 		onDelete: (id: number) => void;
 		onRestore: (id: number, versionId: number) => void;
+		authStatus: Readable<AuthStatus>;
+		onSignOut: () => void;
 	} = $props();
 
 	let menuOpenId = $state<number | null>(null);
@@ -339,6 +345,8 @@
 				{/each}
 			</ul>
 		</nav>
+
+		<AccountMenu status={authStatus} {onSignOut} />
 
 		<div class="flex items-center gap-1 border-t border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 			<a

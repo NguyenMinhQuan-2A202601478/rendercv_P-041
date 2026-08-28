@@ -11,11 +11,23 @@
 	 * always-dark hero regardless of viewer preference). This lets it render
 	 * standalone in tests without a backend.
 	 */
+	import { onMount } from 'svelte';
+	import { auth } from '$lib/stores/auth';
 	import LandingNav from '$lib/components/landing/LandingNav.svelte';
 	import LandingHero from '$lib/components/landing/LandingHero.svelte';
 	import ThemesStrip from '$lib/components/landing/ThemesStrip.svelte';
 	import FaqAccordion from '$lib/components/landing/FaqAccordion.svelte';
 	import FooterCta from '$lib/components/landing/FooterCta.svelte';
+
+	// The one request this page makes, and it is deliberately not awaited by
+	// anything that renders: `getAuthStatus` never throws, so a backend that
+	// is down or has no Google credentials simply leaves `providerAvailable`
+	// false and the page renders complete, minus a sign-in link that could
+	// not have worked anyway.
+	const authStatus = auth.status;
+	onMount(() => {
+		void auth.refresh();
+	});
 </script>
 
 <svelte:head>
@@ -27,7 +39,7 @@
 </svelte:head>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-100">
-	<LandingNav />
+	<LandingNav providerAvailable={$authStatus.providerAvailable} />
 	<main>
 		<LandingHero />
 		<ThemesStrip />

@@ -14,6 +14,7 @@
 	import { createAutosaveController } from '$lib/persistence/autosave';
 	import { createPreferenceWriter } from '$lib/persistence/preferenceWriter';
 	import { theme } from '$lib/stores/theme';
+	import { auth } from '$lib/stores/auth';
 	import { bootstrapApp } from '$lib/app/bootstrap';
 	import { createCvSessionActions } from '$lib/app/cvSessionActions';
 	import { listCvs, createCv, getCv } from '$lib/api/cvs';
@@ -65,6 +66,11 @@
 	const cvActions = createCvSessionActions({ cvs, activeCv, documents }, autosave);
 
 	const prefWriter = createPreferenceWriter();
+
+	// Account state for the sidebar's footer strip. Fetched alongside
+	// bootstrap rather than blocking it: the editor is fully usable signed
+	// out, so nothing here waits on knowing who you are.
+	const authStatus = auth.status;
 
 	// Validate is the authoritative source for inline error placement (it
 	// always includes yaml_source); if it hasn't reported anything wrong yet
@@ -125,7 +131,20 @@
 		autosave.flushBeforeUnload();
 	}
 
+	async function handleSignOut(): Promise<void> {
+		// Flush first: signing out swaps this browser back to a fresh
+		// anonymous session, and an autosave still on the wire would then be
+		// writing as a user who no longer owns the CV.
+		await autosave.flush();
+		await auth.signOut();
+		window.location.reload();
+	}
+
 	onMount(() => {
+		// Not awaited with bootstrap: the editor is fully usable signed out,
+		// so knowing who you are must never delay the CV loading.
+		void auth.refresh();
+
 		void (async () => {
 			try {
 				const preferences = await getPreferences();
@@ -221,6 +240,8 @@
 			onDuplicate={handleDuplicate}
 			onDelete={handleDelete}
 			onRestore={handleRestore}
+			{authStatus}
+			onSignOut={handleSignOut}
 		/>
 		<main class="flex flex-1 overflow-hidden">
 			<div class="min-w-0 shrink-0" style={`flex-basis: ${$splitRatio}%`}>

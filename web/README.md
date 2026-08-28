@@ -20,23 +20,65 @@ web/frontend   Giao diện SvelteKit + TypeScript + Tailwind
 ## Yêu cầu môi trường
 
 - **uv** (Python 3.12+) -- dùng cho mọi thứ liên quan Python; tuyệt đối
-  không dùng `pip` hay gọi `python` trực tiếp.
+  không dùng `pip` hay gọi `python` trực tiếp. `uv` tự tạo và quản lý virtual
+  environment, **không cần `python -m venv` thủ công**.
 - **Node.js 20+** kèm npm.
+- **just** -- chạy các gate của repository (`just check`, `just test`).
+  Cài qua `winget install Casey.Just`, `brew install just`, hoặc
+  `cargo install just`.
 
 ## Cài đặt
 
-Cài một lần cho cả hai workspace:
+### 1. Clone kèm submodule
+
+Repository có hai submodule, trong đó `typst_fontawesome` là **bắt buộc để
+render PDF**:
 
 ```
-cd web/backend
-uv sync
-
-cd ../frontend
-npm install
+git clone --recurse-submodules <url>
 ```
 
-Backend phụ thuộc vào core ở thư mục gốc repository dưới dạng *editable*
-path dependency, nên sửa core là có hiệu lực ngay, không cần cài lại.
+Nếu đã lỡ clone thường:
+
+```
+git submodule update --init --recursive
+```
+
+> Bỏ qua bước này là mọi lần render PDF đều lỗi. Core cài
+> `src/rendercv/renderer/typst_fontawesome` thành một Typst package tên
+> `fontawesome` (xem `renderer/pdf_png.py`); thư mục rỗng thì không tìm thấy
+> `lib.typ` và quá trình biên dịch dừng lại. Kiểm tra bằng
+> `git submodule status` -- không có dấu `-` ở đầu dòng là đã đủ.
+
+### 2. Cài dependency
+
+Ba lệnh, ở ba nơi khác nhau:
+
+```
+just sync                  # ở thư mục gốc repository -- core + gate `just check`/`just test`
+```
+
+```
+cd web/backend && uv sync  # backend
+```
+
+```
+cd web/frontend && npm install   # frontend
+```
+
+> Ở thư mục gốc phải dùng `just sync` (tức `uv sync --frozen --all-extras`)
+> chứ không phải `uv sync` trần: bộ test của core cần các optional extras, và
+> `uv sync` trần sẽ **gỡ** chúng khỏi env, khiến `just test` gãy.
+
+Có **hai virtual environment riêng biệt**, đúng như thiết kế: `.venv` ở gốc
+cho core, `web/backend/.venv` cho backend. `uv` tự tạo cả hai; bạn không cần
+tự kích hoạt cái nào -- `uv run` luôn chọn đúng env theo thư mục hiện tại.
+
+Backend phụ thuộc vào core dưới dạng *editable* path dependency, nên sửa code
+core là có hiệu lực ngay với backend, không cần cài lại.
+
+Muốn Postgres thì thêm `uv sync --extra postgres` ở `web/backend` (xem mục
+[Deploy](#deploy)).
 
 ## Chạy ứng dụng
 

@@ -342,7 +342,7 @@
 
 		<div class="flex items-center gap-1 border-t border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 			<a
-				href="/welcome"
+				href="/"
 				class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-[var(--surface-card)] dark:hover:text-neutral-200"
 			>
 				<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">

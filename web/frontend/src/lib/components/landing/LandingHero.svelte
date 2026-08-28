@@ -62,7 +62,7 @@
 
 			<div class="mt-10 flex flex-wrap gap-3">
 				<a
-					href="/"
+					href="/app"
 					class="rounded-md bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
 				>
 					Open the editor

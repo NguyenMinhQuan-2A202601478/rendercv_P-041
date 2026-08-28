@@ -36,7 +36,7 @@ export async function firstPreviewUrl(page: Page): Promise<string> {
  * root element as an explicit, single-purpose signal for exactly this --
  * every spec should wait on it before interacting with the page.
  */
-export async function gotoReady(page: Page, path = '/'): Promise<void> {
+export async function gotoReady(page: Page, path = '/app'): Promise<void> {
 	await page.goto(path);
 	await expect(page.locator('[data-app-ready="true"]')).toHaveCount(1, { timeout: 15_000 });
 }

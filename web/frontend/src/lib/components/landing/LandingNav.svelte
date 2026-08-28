@@ -9,7 +9,7 @@
 
 <header class="sticky top-0 z-20 border-b border-white/10 bg-neutral-950/80 backdrop-blur">
 	<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-		<a href="/welcome" class="flex items-center gap-2 text-neutral-100" aria-label="RenderCV home">
+		<a href="/" class="flex items-center gap-2 text-neutral-100" aria-label="RenderCV home">
 			<svg
 				width="24"
 				height="24"
@@ -26,7 +26,7 @@
 		</a>
 
 		<a
-			href="/"
+			href="/app"
 			class="rounded-md bg-purple-600 px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
 		>
 			Open the editor

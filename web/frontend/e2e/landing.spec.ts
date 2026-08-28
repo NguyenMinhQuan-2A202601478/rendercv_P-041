@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Phase 5c: the static `/welcome` landing page.
+ * Phase 5c: the static landing page, served at `/` since Phase 6
+ * moved the editor to `/app`.
  *
  * Why this spec never touches the backend (unlike every other `e2e/*.spec.ts`
  * file, which calls `gotoReady`/`firstPreviewUrl` and depends on
@@ -11,7 +12,7 @@ import { test, expect } from '@playwright/test';
  * failing if any `/api/*` request is observed, instead of waiting on one.
  */
 
-test.describe('Landing page (/welcome)', () => {
+test.describe('Landing page (/)', () => {
 	test('renders with no /api requests', async ({ page }) => {
 		const apiRequests: string[] = [];
 		page.on('request', (request) => {
@@ -20,17 +21,17 @@ test.describe('Landing page (/welcome)', () => {
 			}
 		});
 
-		await page.goto('/welcome');
+		await page.goto('/');
 		await expect(page.getByRole('heading', { level: 1 })).toContainText('YAML-first resume builder');
 
 		expect(apiRequests).toEqual([]);
 	});
 
 	test('hero, feature bullets, and CTAs are visible', async ({ page }) => {
-		await page.goto('/welcome');
+		await page.goto('/');
 
 		await expect(page.getByRole('link', { name: 'RenderCV home' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Open the editor' }).first()).toHaveAttribute('href', '/');
+		await expect(page.getByRole('link', { name: 'Open the editor' }).first()).toHaveAttribute('href', '/app');
 
 		const features = page.getByRole('list', { name: 'Key features' });
 		await expect(features.getByText('Industry-standard themes')).toBeVisible();
@@ -43,7 +44,7 @@ test.describe('Landing page (/welcome)', () => {
 	});
 
 	test('9-theme strip lists all built-in themes', async ({ page }) => {
-		await page.goto('/welcome');
+		await page.goto('/');
 
 		const strip = page.getByRole('region', { name: '9 built-in themes' });
 		const themes = [
@@ -63,7 +64,7 @@ test.describe('Landing page (/welcome)', () => {
 	});
 
 	test('FAQ accordion opens and closes with native <details>', async ({ page }) => {
-		await page.goto('/welcome');
+		await page.goto('/');
 
 		const question = page.getByText('Is my data private?');
 		const details = page.locator('details', { has: question });
@@ -78,12 +79,25 @@ test.describe('Landing page (/welcome)', () => {
 	});
 
 	test('footer CTA links to the editor and credits upstream RenderCV', async ({ page }) => {
-		await page.goto('/welcome');
+		await page.goto('/');
 
 		await expect(page.getByRole('heading', { name: 'Ready to build your CV?' })).toBeVisible();
 		const github = page.getByRole('link', { name: 'Powered by RenderCV (open source)' });
 		await expect(github).toHaveAttribute('href', 'https://github.com/rendercv/rendercv');
 		await expect(github).toHaveAttribute('target', '_blank');
+	});
+
+	test('the old /welcome address permanently redirects to the landing page', async ({ page }) => {
+		// Phase 6 moved the landing page from /welcome to /. Bookmarks and
+		// links shared while it lived at /welcome must keep working rather
+		// than 404, so that address is kept as a permanent redirect.
+		const response = await page.goto('/welcome');
+
+		expect(new URL(page.url()).pathname).toBe('/');
+		await expect(page.getByRole('heading', { level: 1 })).toContainText(
+			'YAML-first resume builder'
+		);
+		expect(response?.status()).toBe(200); // followed the redirect to a real page
 	});
 });
 

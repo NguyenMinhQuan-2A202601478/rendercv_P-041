@@ -13,9 +13,10 @@ import { gotoReady } from './helpers';
  * prove here is only that the UI renders the right thing for each answer,
  * and that is exactly what the interception fixes.
  *
- * The unconfigured case is NOT intercepted: the e2e backend genuinely runs
- * without Google credentials, so that assertion runs against the real
- * `provider_available: false`.
+ * Every case is intercepted, including the unconfigured one. Reading the
+ * backend's real answer there would make the suite pass or fail based on
+ * whether the person running it happens to have Google configured in their
+ * own `.env`, which is not a property of the code under test.
  */
 
 async function serveAuthStatus(
@@ -34,7 +35,20 @@ async function serveAuthStatus(
 
 test.describe('Auth controls', () => {
 	test('a deployment without Google credentials offers no sign-in at all', async ({ page }) => {
-		// Not intercepted: this is the e2e backend's real answer.
+		// Intercepted like the others rather than relying on the backend's own
+		// answer: a developer who has configured Google locally would
+		// otherwise fail this test purely because of their `.env`, which is
+		// not something the suite should have an opinion about. That the
+		// server really does report `provider_available: false` when the
+		// credentials are unset is covered where it belongs, in
+		// `web/backend/tests/test_auth_api.py`.
+		await serveAuthStatus(page, {
+			authenticated: false,
+			email: null,
+			display_name: null,
+			provider_available: false
+		});
+
 		await page.goto('/');
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);

@@ -20,32 +20,86 @@ web/frontend   Giao diện SvelteKit + TypeScript + Tailwind
 ## Yêu cầu môi trường
 
 - **uv** (Python 3.12+) -- dùng cho mọi thứ liên quan Python; tuyệt đối
-  không dùng `pip` hay gọi `python` trực tiếp.
+  không dùng `pip` hay gọi `python` trực tiếp. `uv` tự tạo và quản lý virtual
+  environment, **không cần `python -m venv` thủ công**.
 - **Node.js 20+** kèm npm.
+- **just** -- chạy các gate của repository (`just check`, `just test`).
+  Cài qua `winget install Casey.Just`, `brew install just`, hoặc
+  `cargo install just`.
 
 ## Cài đặt
 
-Cài một lần cho cả hai workspace:
+### 1. Clone kèm submodule
+
+Repository có hai submodule, trong đó `typst_fontawesome` là **bắt buộc để
+render PDF**:
+
+```
+git clone --recurse-submodules <url>
+```
+
+Nếu đã lỡ clone thường:
+
+```
+git submodule update --init --recursive
+```
+
+> Bỏ qua bước này là mọi lần render PDF đều lỗi. Core cài
+> `src/rendercv/renderer/typst_fontawesome` thành một Typst package tên
+> `fontawesome` (xem `renderer/pdf_png.py`); thư mục rỗng thì không tìm thấy
+> `lib.typ` và quá trình biên dịch dừng lại. Kiểm tra bằng
+> `git submodule status` -- không có dấu `-` ở đầu dòng là đã đủ.
+
+### 2. Cài dependency
+
+Ba lệnh, ở ba nơi khác nhau:
+
+```
+just sync                  # ở thư mục gốc repository -- core + gate `just check`/`just test`
+```
+
+```
+cd web/backend && uv sync  # backend
+```
+
+```
+cd web/frontend && npm install   # frontend
+```
+
+> Ở thư mục gốc phải dùng `just sync` (tức `uv sync --frozen --all-extras`)
+> chứ không phải `uv sync` trần: bộ test của core cần các optional extras, và
+> `uv sync` trần sẽ **gỡ** chúng khỏi env, khiến `just test` gãy.
+
+Có **hai virtual environment riêng biệt**, đúng như thiết kế: `.venv` ở gốc
+cho core, `web/backend/.venv` cho backend. `uv` tự tạo cả hai; bạn không cần
+tự kích hoạt cái nào -- `uv run` luôn chọn đúng env theo thư mục hiện tại.
+
+Backend phụ thuộc vào core dưới dạng *editable* path dependency, nên sửa code
+core là có hiệu lực ngay với backend, không cần cài lại.
+
+Muốn Postgres thì thêm `uv sync --extra postgres` ở `web/backend` (xem mục
+[Deploy](#deploy)).
+
+## Chạy ứng dụng
+
+Sao chép file mẫu biến môi trường (có thể bỏ qua nếu chỉ chạy ẩn danh trên
+SQLite -- mọi biến đều tuỳ chọn):
 
 ```
 cd web/backend
-uv sync
-
-cd ../frontend
-npm install
+cp .env.example .env
 ```
-
-Backend phụ thuộc vào core ở thư mục gốc repository dưới dạng *editable*
-path dependency, nên sửa core là có hiệu lực ngay, không cần cài lại.
-
-## Chạy ứng dụng
 
 Hai tiến trình, ở hai terminal:
 
 ```
 cd web/backend
-uv run uvicorn rendercv_web.app:app --port 8000
+uv run --env-file .env uvicorn rendercv_web.app:app --port 8000
 ```
+
+> `--env-file .env` là phần dễ bỏ sót nhất. Thiếu nó thì backend không đọc
+> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`, và giao diện đăng nhập sẽ bị ẩn dù bạn
+> đã điền đúng vào `.env`. Chưa tạo `.env` thì bỏ luôn cờ này đi.
 
 ```
 cd web/frontend
@@ -65,6 +119,12 @@ hiện tại.
 phiên ẩn danh, và các CV thuộc về phiên đó.
 
 ## Cấu hình
+
+Danh sách đầy đủ kèm chú thích nằm trong
+[`web/backend/.env.example`](backend/.env.example) -- copy thành `.env` rồi
+điền. `.env` đã được gitignore; file mẫu thì không, nên đừng bao giờ đặt giá
+trị thật vào đó.
+
 
 | Biến môi trường | Mặc định | Ghi chú |
 | --- | --- | --- |
@@ -186,11 +246,31 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 GOOGLE_OAUTH_REDIRECT_URI=https://<tên-miền-của-bạn>/api/auth/google/callback
 ```
 
-Lần đầu một người đăng nhập, các CV họ đã soạn khi còn ẩn danh **được gộp
-vào tài khoản**, không mất gì. Đăng nhập ở trình duyệt thứ hai cũng vậy: CV
-soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có.
+### Phiên và tài khoản hoạt động thế nào
+
+| Tình huống | Điều xảy ra |
+| --- | --- |
+| Đăng nhập lần đầu | CV đã soạn khi còn ẩn danh **được gộp vào tài khoản**, không mất gì |
+| Đăng nhập ở trình duyệt thứ hai | CV soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có |
+| Đang đăng nhập rồi đăng nhập bằng **tài khoản Google khác** | Chuyển tài khoản sạch sẽ: tài khoản cũ **không bị đụng tới**, CV của nó vẫn thuộc về nó |
+| Đăng xuất | **Thoát trên mọi thiết bị**, không chỉ trình duyệt hiện tại |
+
+Hai dòng cuối đáng chú ý:
+
+- Trường hợp đổi tài khoản từng là một lỗi nghiêm trọng — tài khoản thứ nhất
+  bị ghi đè hoặc xoá hẳn, CV rơi sang người mới. Đã sửa và có test hồi quy
+  canh giữ.
+- Đăng xuất thoát mọi thiết bị vì một tài khoản chỉ có một `session_token`.
+  Đây là lựa chọn có chủ đích: giữa "bị thoát bất ngờ ở máy khác" và "phiên
+  không thu hồi được", cái đầu tốn một cú click, cái sau mất tài khoản.
+  Muốn thoát theo từng thiết bị thì cần thêm bảng `sessions` riêng.
 
 ## Deploy
+
+> Cần hướng dẫn từng bước (tạo OAuth client, chọn Postgres, chạy migration,
+> kiểm chứng)? Xem
+> [`docs/runbooks/enable-google-sign-in-and-postgres.md`](../docs/runbooks/enable-google-sign-in-and-postgres.md).
+> Mục dưới đây là phần tra cứu.
 
 ### Biến môi trường
 

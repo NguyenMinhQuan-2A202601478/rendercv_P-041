@@ -90,4 +90,31 @@ test.describe('CV form editor (schema-driven, CV tab)', () => {
 		// reliable check here (see FieldRow.svelte's label markup).
 		await expect(section.getByLabel('Company')).toBeVisible({ timeout: 5_000 });
 	});
+
+	test('markdown fields say what formatting they accept, once per list', async ({ page }) => {
+		// Nothing else in the UI tells a form user this: the schema never
+		// mentions it, and the B/I/link toolbar buttons are disabled outside
+		// YAML mode, which if anything implies the opposite.
+		await switchToFormMode(page);
+
+		await page.getByLabel('New section title').fill('Experience');
+		await page.getByRole('button', { name: '+ Add section' }).click();
+
+		const section = page.locator('section[aria-label="Section: Experience"]');
+		await expect(section).toBeVisible({ timeout: 5_000 });
+		await section.getByRole('radio', { name: /Experience/ }).click();
+		await expect(section.getByLabel('Company')).toBeVisible({ timeout: 5_000 });
+
+		const hint = section.getByText(/Supports inline Markdown/);
+		await expect(hint.first()).toBeVisible({ timeout: 10_000 });
+
+		// Highlights is an array: one editable field per bullet. The hint
+		// belongs to the list, so adding bullets must not multiply it.
+		const before = await hint.count();
+		const highlights = section.locator('div', { hasText: /^Highlights/ }).first();
+		await highlights.getByRole('button', { name: '+ Add' }).first().click();
+		await highlights.getByRole('button', { name: '+ Add' }).first().click();
+
+		await expect.poll(() => hint.count(), { timeout: 5_000 }).toBe(before);
+	});
 });

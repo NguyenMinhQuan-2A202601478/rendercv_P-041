@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FieldDescriptor } from '$lib/schema/types';
 	import DynamicField from './DynamicField.svelte';
+	import { MARKDOWN_FORMAT_HINT } from '$lib/form/markdownHint';
 
 	/**
 	 * `+ Add` / per-item delete / drag-handle reorder for a schema-described
@@ -116,6 +117,12 @@
 		</button>
 	</div>
 
+	{#if itemDescriptor.kind === 'markdown'}
+		<!-- Once for the whole list: every item is the same kind of field, and
+		     repeating this under each bullet would bury the content. -->
+		<p class="text-xs text-neutral-400 dark:text-neutral-400">{MARKDOWN_FORMAT_HINT}</p>
+	{/if}
+
 	{#if values.length === 0}
 		<p class="text-xs text-neutral-400 dark:text-neutral-400">None yet.</p>
 	{/if}
@@ -142,6 +149,7 @@
 				<div class="min-w-0 flex-1">
 					<DynamicField
 						descriptor={{ ...itemDescriptor, label: itemDescriptor.label || `${descriptor.label} ${i + 1}` }}
+						hideFormatHint
 						value={item}
 						onchange={(v) => itemChange(i, v)}
 					/>

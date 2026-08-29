@@ -20,7 +20,8 @@
 		errors = [],
 		onchange,
 		path,
-		overrideInfo
+		overrideInfo,
+		hideFormatHint
 	}: {
 		descriptor: FieldDescriptor;
 		value: unknown;
@@ -29,6 +30,8 @@
 		/** See `FieldRow`'s doc comment: threaded through unchanged for the effective-value overlay. */
 		path?: PathSegment[];
 		overrideInfo?: OverrideInfo;
+		/** See `FieldRow`: set by `ArrayField` so the hint shows once per list. */
+		hideFormatHint?: boolean;
 	} = $props();
 </script>
 
@@ -50,5 +53,5 @@
 		{overrideInfo}
 	/>
 {:else}
-	<FieldRow {descriptor} {value} {errors} {onchange} {path} {overrideInfo} />
+	<FieldRow {descriptor} {value} {errors} {onchange} {path} {overrideInfo} {hideFormatHint} />
 {/if}

@@ -7,6 +7,7 @@
 	import StepperField from './StepperField.svelte';
 	import ColorField from './ColorField.svelte';
 	import DimensionField from './DimensionField.svelte';
+	import { MARKDOWN_FORMAT_HINT } from '$lib/form/markdownHint';
 
 	/**
 	 * `SegmentedControl` fits without wrapping for a short enum (the
@@ -21,7 +22,8 @@
 		errors = [],
 		onchange,
 		path,
-		overrideInfo
+		overrideInfo,
+		hideFormatHint
 	}: {
 		descriptor: FieldDescriptor;
 		value: unknown;
@@ -37,6 +39,12 @@
 		 */
 		path?: PathSegment[];
 		overrideInfo?: OverrideInfo;
+		/**
+		 * Set by `ArrayField` on its items: an array of markdown fields shows
+		 * the formatting hint once, above the list, instead of repeating it
+		 * under every bullet.
+		 */
+		hideFormatHint?: boolean;
 	} = $props();
 
 	const instanceId = Math.random().toString(36).slice(2, 8);
@@ -184,6 +192,10 @@
 
 		{#if descriptor.description}
 			<p class="text-xs text-neutral-400 dark:text-neutral-400">{descriptor.description}</p>
+		{/if}
+
+		{#if descriptor.kind === 'markdown' && !hideFormatHint}
+			<p class="text-xs text-neutral-400 dark:text-neutral-400">{MARKDOWN_FORMAT_HINT}</p>
 		{/if}
 
 		{#if errors.length > 0}

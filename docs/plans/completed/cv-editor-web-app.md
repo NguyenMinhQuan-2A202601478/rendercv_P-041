@@ -276,16 +276,23 @@ three-pane editor, four tabs each in form or YAML mode, nine themes,
 autosave with conflict reconciliation, multi-CV persistence, dark mode,
 an opt-in client-side WASM preview, and optional Google sign-in.
 
-Two things the test suites cannot establish, both needing a human with
-credentials:
+Both of the things the test suites could not establish have since been
+run for real, and both were worth running:
 
-- that Google accepts our authorization request — the backend tests
-  patch one seam because the real flow ends at a consent screen;
-- that the migration runs against a live Postgres server — only driver
-  and dialect resolution were exercised, plus the full migration round
-  trip on SQLite.
+- **Google sign-in** completed end to end against a real OAuth client.
+  The database afterwards held exactly one `users` row, carrying
+  `auth_provider='google'` and still owning the CV written before
+  signing in — the promote-in-place path behaving as designed.
+- **The Postgres migration failed on the first real attempt.** The
+  driver rewrite added in wave 4 lived in `create_engine_from_url`,
+  which migrations never call, so both the alembic CLI and the app's own
+  startup migration died on a pasted provider URL. Fixed by moving the
+  rewrite into `resolve_database_url`, then verified against a real
+  PostgreSQL 16 server: upgrade, schema inspection, a downgrade/upgrade
+  round trip, and the app migrating an empty database at startup.
 
-Both are the first things to run once a provider is chosen.
+That second one is the lesson worth keeping: dialect resolution and a
+SQLite round trip both passed while the real path was broken.
 `RENDERCV_WEB_SECRET` and `RENDERCV_WEB_HTTPS` must be set before any
 deployment; `web/README.md` carries the operator instructions.
 

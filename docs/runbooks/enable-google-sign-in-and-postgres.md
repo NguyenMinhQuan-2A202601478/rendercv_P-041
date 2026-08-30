@@ -10,11 +10,17 @@ Both are configuration, not code. The application runs correctly without
 either — anonymous sessions and a SQLite file are a supported mode, and the
 sign-in UI stays hidden when no provider is configured.
 
-Neither could be verified from inside the repository. The backend tests patch
-one seam (`oauth.fetch_google_identity`) because the real flow ends at
-Google's consent screen, and the Postgres path was only exercised as far as
-driver and dialect resolution, plus a full migration round trip on SQLite. So
-the validation steps here are the first real proof either works.
+Both have now been run for real, and both turned up something the tests could
+not. The Postgres path failed outright on a first attempt -- migrations
+bypassed the driver rewrite entirely (fixed; see **Deterministic State**).
+Google sign-in completed end to end against a real client, and the resulting
+database showed the promote-in-place path working: one row, carrying the
+account identity, still owning the CV written before signing in.
+
+What the automated tests still cannot cover stays true: they patch
+`oauth.fetch_google_identity` because the real flow ends at a consent screen
+a test cannot drive. So re-run the **Interface** section by hand after any
+change to the sign-in flow.
 
 ## Prerequisites
 
@@ -207,7 +213,10 @@ credentialed requests: the page loads, sign-in and saving silently fail, and
 the only clue is a CORS error in the console.
 
 The journey that proves the outcome is the **Interface** section run against
-the deployment, not against localhost.
+the deployment, not against localhost. On localhost it has been run: the
+account chooser appeared, the callback returned 303, and the `users` table
+held a single row carrying `auth_provider='google'` and still owning the
+anonymous session's CV.
 
 ## Unknowns
 
@@ -217,6 +226,7 @@ the deployment, not against localhost.
   TLS and network policy that a local server does not exercise.
 - The production domain, and so the production redirect URI.
 - Whether the Google app will stay in Testing (its user list is capped and
-  restricted to named test users) or go through verification.
+  restricted to named test users) or go through verification. Sign-in has
+  only been exercised as a listed test user.
 - Where the deployment stores secrets; this runbook assumes environment
   variables and does not choose a secret manager.

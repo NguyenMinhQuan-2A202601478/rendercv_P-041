@@ -36,40 +36,6 @@ DEFAULT_DATABASE_URL = "sqlite:///./data/rendercv_web.db"
 DATABASE_URL_ENV_VAR = "RENDERCV_WEB_DATABASE_URL"
 
 
-def resolve_database_url() -> str:
-    """Read the configured database URL, falling back to the SQLite default.
-
-    Why:
-        Read fresh on every call (never cached at import time) so tests
-        that set the env var per-test, or callers that pass an explicit
-        URL, are never shadowed by a stale value from a previous import.
-
-    Returns:
-        The database URL to connect with.
-    """
-    return os.environ.get(DATABASE_URL_ENV_VAR, DEFAULT_DATABASE_URL)
-
-
-def ensure_sqlite_directory(url: str) -> None:
-    """Create the parent directory of a SQLite file URL if it is missing.
-
-    Why:
-        SQLite refuses to create a database file inside a directory that
-        does not exist yet; Postgres URLs have no local path to create, so
-        this is a no-op for them.
-
-    Args:
-        url: A SQLAlchemy database URL.
-    """
-    prefix = "sqlite:///"
-    if not url.startswith(prefix):
-        return
-    path_part = url[len(prefix) :]
-    if path_part in ("", ":memory:"):
-        return
-    pathlib.Path(path_part).parent.mkdir(parents=True, exist_ok=True)
-
-
 def normalize_database_url(url: str) -> str:
     """Point bare Postgres URLs at the driver this project actually installs.
 
@@ -96,6 +62,50 @@ def normalize_database_url(url: str) -> str:
         if url.startswith(prefix):
             return "postgresql+psycopg://" + url[len(prefix) :]
     return url
+
+
+def resolve_database_url() -> str:
+    """Read the configured database URL, falling back to the SQLite default.
+
+    Why:
+        Read fresh on every call (never cached at import time) so tests
+        that set the env var per-test, or callers that pass an explicit
+        URL, are never shadowed by a stale value from a previous import.
+
+    Why normalization happens *here* and not only in
+    `create_engine_from_url`: migrations do not go through that function.
+    Alembic builds its own engine from the URL string, so normalizing only
+    at engine creation left both migration paths -- the `alembic` CLI and
+    the app's own startup `upgrade_to_head` -- failing on exactly the
+    provider URLs the normalization exists to accept. Doing it at the
+    single point where the URL is read covers every consumer.
+
+    Returns:
+        The database URL to connect with, with a driver SQLAlchemy can load.
+    """
+    return normalize_database_url(
+        os.environ.get(DATABASE_URL_ENV_VAR, DEFAULT_DATABASE_URL)
+    )
+
+
+def ensure_sqlite_directory(url: str) -> None:
+    """Create the parent directory of a SQLite file URL if it is missing.
+
+    Why:
+        SQLite refuses to create a database file inside a directory that
+        does not exist yet; Postgres URLs have no local path to create, so
+        this is a no-op for them.
+
+    Args:
+        url: A SQLAlchemy database URL.
+    """
+    prefix = "sqlite:///"
+    if not url.startswith(prefix):
+        return
+    path_part = url[len(prefix) :]
+    if path_part in ("", ":memory:"):
+        return
+    pathlib.Path(path_part).parent.mkdir(parents=True, exist_ok=True)
 
 
 def create_engine_from_url(url: str) -> Engine:

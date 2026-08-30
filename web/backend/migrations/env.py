@@ -1,13 +1,8 @@
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from rendercv_web.db.models import Base
-from rendercv_web.db.session import (
-    DATABASE_URL_ENV_VAR,
-    DEFAULT_DATABASE_URL,
-    ensure_sqlite_directory,
-)
+from rendercv_web.db.session import ensure_sqlite_directory, resolve_database_url
 from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
@@ -25,9 +20,12 @@ if config.config_file_name is not None:
 # Why: migrations must run against the same database the app talks to
 # (RENDERCV_WEB_DATABASE_URL), never a hardcoded URL baked into
 # alembic.ini -- this overrides whatever `sqlalchemy.url` says there.
-config.set_main_option(
-    "sqlalchemy.url", os.environ.get(DATABASE_URL_ENV_VAR, DEFAULT_DATABASE_URL)
-)
+# `resolve_database_url` rather than a raw `os.environ` read: it is what
+# rewrites a provider's `postgres://` / `postgresql://` string onto the
+# driver actually installed. Reading the variable directly here is what
+# made `alembic upgrade head` fail on a pasted connection string while
+# the running app accepted it.
+config.set_main_option("sqlalchemy.url", resolve_database_url())
 
 # `target_metadata` enables `alembic revision --autogenerate` to diff the
 # ORM models against the live schema; the models are the source of truth.

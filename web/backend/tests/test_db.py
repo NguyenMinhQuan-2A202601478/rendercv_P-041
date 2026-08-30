@@ -18,8 +18,13 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from rendercv_web.db import repository as repo
+from rendercv_web.db.migrate import build_alembic_config
 from rendercv_web.db.models import Base, CvVersion
-from rendercv_web.db.session import create_engine_from_url, normalize_database_url
+from rendercv_web.db.session import (
+    create_engine_from_url,
+    normalize_database_url,
+    resolve_database_url,
+)
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -450,3 +455,39 @@ class TestNormalizeDatabaseUrl:
         assert (
             normalize_database_url("sqlite:///./data/x.db") == "sqlite:///./data/x.db"
         )
+
+
+class TestMigrationPathsNormalizeTheUrl:
+    """Every consumer of the URL must get the driver rewrite, not just one.
+
+    Regression for a real failure: the normalization originally lived in
+    `create_engine_from_url`, but migrations never call it -- alembic
+    builds its own engine from the URL string. So `alembic upgrade head`
+    and the app's own startup migration both died on exactly the provider
+    URLs the rewrite exists to accept, and only a run against a real
+    Postgres server surfaced it.
+    """
+
+    def test_resolve_database_url_rewrites_a_provider_url(self, monkeypatch) -> None:
+        monkeypatch.setenv(
+            "RENDERCV_WEB_DATABASE_URL", "postgresql://user:pw@host:5432/db"
+        )
+
+        assert resolve_database_url() == "postgresql+psycopg://user:pw@host:5432/db"
+
+    def test_alembic_config_carries_the_rewritten_url(self, monkeypatch) -> None:
+        # `migrate.build_alembic_config` is what the app's startup path and
+        # the CLI both end up handing to alembic.
+        monkeypatch.setenv("RENDERCV_WEB_DATABASE_URL", "postgres://user:pw@host/db")
+
+        config = build_alembic_config(resolve_database_url())
+
+        assert (
+            config.get_main_option("sqlalchemy.url")
+            == "postgresql+psycopg://user:pw@host/db"
+        )
+
+    def test_sqlite_urls_still_pass_through_untouched(self, monkeypatch) -> None:
+        monkeypatch.setenv("RENDERCV_WEB_DATABASE_URL", "sqlite:///./data/x.db")
+
+        assert resolve_database_url() == "sqlite:///./data/x.db"

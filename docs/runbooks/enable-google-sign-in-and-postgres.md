@@ -121,7 +121,16 @@ RENDERCV_WEB_DATABASE_URL="<connection string>" uv run alembic upgrade head
 ```
 
 Two `Running upgrade` lines are expected: the baseline schema, then the OAuth
-identity columns.
+identity columns. Alembic also prints `Context impl PostgresqlImpl`, which is
+worth reading -- it confirms the migration really ran against Postgres rather
+than falling back to the SQLite default.
+
+This path has now been exercised against a real PostgreSQL 16 server, not
+only reasoned about: `alembic upgrade head` from a bare `postgresql://` URL,
+the resulting schema inspected (all four tables, the four nullable auth
+columns, the `uq_users_auth_provider_identity` constraint), a downgrade and
+re-upgrade round trip, and the application started against an empty database
+so its own startup migration ran unattended.
 
 The connection string can be pasted exactly as the provider gives it.
 `postgres://` (Railway, Heroku), `postgresql://` (Neon, Supabase) and
@@ -203,7 +212,9 @@ the deployment, not against localhost.
 ## Unknowns
 
 - Which Postgres provider will be used, and therefore the real connection
-  string and its SSL requirements.
+  string and its SSL requirements. The migration itself is no longer an
+  unknown -- see **Deterministic State** -- but a managed provider adds
+  TLS and network policy that a local server does not exercise.
 - The production domain, and so the production redirect URI.
 - Whether the Google app will stay in Testing (its user list is capped and
   restricted to named test users) or go through verification.

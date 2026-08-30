@@ -82,6 +82,10 @@ Muốn Postgres thì thêm `uv sync --extra postgres` ở `web/backend` (xem m�
 
 ## Chạy ứng dụng
 
+> Dùng Windows/PowerShell? [`SETUP-LOCALHOST.md`](SETUP-LOCALHOST.md) có
+> đúng những lệnh này ở dạng PowerShell, kèm cách xem log và cách gỡ khi
+> cổng bị chiếm.
+
 Sao chép file mẫu biến môi trường (có thể bỏ qua nếu chỉ chạy ẩn danh trên
 SQLite -- mọi biến đều tuỳ chọn):
 

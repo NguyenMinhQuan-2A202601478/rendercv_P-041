@@ -66,6 +66,26 @@ test.describe('Landing page (/)', () => {
 		await expect(page.getByRole('img', { name: /five CV theme layouts/ })).toBeVisible();
 	});
 
+	test('the hero showcase renders real CV images, not empty cards', async ({ page }) => {
+		// The assertion above passes even with every image broken: the
+		// showcase's accessible name lives on a wrapping div, so a 404 on all
+		// five files leaves it "visible" and empty. That is exactly how this
+		// shipped -- five blank cards that read as a failed load. Decoding
+		// each image is what actually proves the files are there and served.
+		await page.goto('/');
+
+		const images = page.locator('[aria-label*="five CV theme layouts"] img');
+		await expect(images).toHaveCount(5);
+
+		for (let i = 0; i < 5; i += 1) {
+			const decoded = await images.nth(i).evaluate((node) => {
+				const image = node as HTMLImageElement;
+				return image.complete && image.naturalWidth > 0;
+			});
+			expect(decoded, `theme image ${i} did not decode`).toBe(true);
+		}
+	});
+
 	test('9-theme strip lists all built-in themes', async ({ page }) => {
 		await page.goto('/');
 

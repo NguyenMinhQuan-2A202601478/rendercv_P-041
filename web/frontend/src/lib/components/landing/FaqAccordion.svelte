@@ -3,8 +3,8 @@
 	 * Native <details>/<summary> accordion -- keyboard- and screen-reader
 	 * accessible for free (no custom ARIA state to keep in sync), styled to
 	 * match the dark landing page. Copy is honest about this being a
-	 * self-hosted clone: no accounts, no third-party data sharing, no fake
-	 * social proof.
+	 * self-hosted clone: an account is needed and it is a Google one, the
+	 * data stays on this deployment, and there is no fake social proof.
 	 */
 	const items: { question: string; answer: string }[] = [
 		{
@@ -15,7 +15,7 @@
 		{
 			question: 'Is my data private?',
 			answer:
-				'Yes. There are no user accounts. The first time you visit the editor, the server assigns your browser an anonymous device session (a cookie), and your CVs are stored in a local SQLite database tied to that session — nothing is sent to a third-party service.'
+				'Your CVs are stored in the database this deployment owns and are not sent to any third-party service. Opening the editor needs an account, which is what ties the CVs to you rather than to one browser: sign in with Google and your work is there on your next visit and on your other devices. Google tells this server your email address and display name, and nothing else.'
 		},
 		{
 			question: 'What themes are available?',
@@ -26,6 +26,11 @@
 			question: 'Can I use plain YAML?',
 			answer:
 				'Yes. Every tab has a YAML toggle in the top-right corner — switch to the raw editor at any time and edit the text directly. The form and the YAML stay in sync in both directions.'
+		},
+		{
+			question: 'Do I need an account?',
+			answer:
+				'Yes, to open the editor. Signing in with Google is the whole of it — there is no separate sign-up form, and a first visit and a return visit use the same button. Without it your CVs could not be saved against anything but a single browser.'
 		},
 		{
 			question: 'Do I need to install anything?',

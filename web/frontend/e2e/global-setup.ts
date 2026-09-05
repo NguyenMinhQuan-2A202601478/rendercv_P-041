@@ -1,6 +1,11 @@
 import { request as playwrightRequest, type APIRequestContext } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { ACCOUNT_POOL_SIZE, DATABASE_URL, TEST_SECRET } from './testAccount';
 
-const BASE_URL = 'http://localhost:5199';
+const PORT = 5199;
+const BASE_URL = `http://localhost:${PORT}`;
 const MAX_WAIT_MS = 60_000;
 const POLL_INTERVAL_MS = 500;
 
@@ -17,25 +22,56 @@ async function waitUntilReachable(context: APIRequestContext): Promise<void> {
 }
 
 /**
- * Warms up the backend's very first Typst render before any test runs.
+ * Creates the pool of accounts the tests sign in as.
  *
- * Why: a freshly-started `uvicorn` process pays a one-time cost on its
- * first `/api/render` -- font loading, Python import warm-up, first-call
- * JIT-ish overhead in the `typst` bindings -- on top of whatever a test
- * itself asks for. Without this, whichever test happens to run first
- * against a just-restarted backend absorbs that cost itself, which can
- * occasionally push its own (already generous) wait past its timeout --
- * observed directly: an otherwise-stable suite failing only its first test
- * immediately after restarting the backend, never once the backend had
- * served a render already. This pays that cost once, up front, with its
- * own long timeout, so it never eats into an individual test's budget.
+ * The rows are written by `e2e/seedAccount.py`, running production
+ * repository code against the throwaway database Playwright started the
+ * backend on -- see `e2e/testAccount.ts` for why they are not created by
+ * signing in for real, and `e2e/fixtures.ts` for how a test picks one.
+ */
+function seedAccountPool(): void {
+	const here = dirname(fileURLToPath(import.meta.url));
+
+	execFileSync(
+		'uv',
+		['run', '--frozen', 'python', join(here, 'seedAccount.py'), String(ACCOUNT_POOL_SIZE)],
+		{
+			cwd: join(here, '..', '..', 'backend'),
+			env: {
+				...process.env,
+				RENDERCV_WEB_DATABASE_URL: DATABASE_URL,
+				RENDERCV_WEB_SECRET: TEST_SECRET
+			},
+			stdio: 'inherit'
+		}
+	);
+}
+
+/**
+ * Prepares everything that must exist before the first test runs.
  *
- * Why it polls for reachability first rather than assuming the frontend
- * dev server (`webServer`) is already up: Playwright's `globalSetup` vs
- * `webServer` start-order isn't a contract this file should depend on --
- * polling makes it correct either way.
+ * Two jobs, both one-time costs the suite should not charge to whichever
+ * test happens to go first:
+ *
+ * 1. Seeding the account pool. Every spec but the signed-out ones takes
+ *    an account from it, and the rows must exist before the first test
+ *    puts one of their cookies on a browser context.
+ *
+ * 2. Warming the backend's first Typst render -- a freshly-started
+ *    `uvicorn` pays a one-time cost there (font loading, Python import
+ *    warm-up, first-call overhead in the `typst` bindings) on top of
+ *    whatever a test asks for. Without this, whichever test ran first
+ *    absorbed it and could push its own generous wait past its timeout;
+ *    observed directly as an otherwise-stable suite failing only its first
+ *    test immediately after a backend restart.
+ *
+ * The warm-up polls for reachability first rather than assuming the
+ * `webServer` entries are already up: Playwright's `globalSetup` vs
+ * `webServer` start order is not a contract this file should depend on.
  */
 export default async function globalSetup(): Promise<void> {
+	seedAccountPool();
+
 	const context = await playwrightRequest.newContext({ baseURL: BASE_URL });
 	try {
 		await waitUntilReachable(context);

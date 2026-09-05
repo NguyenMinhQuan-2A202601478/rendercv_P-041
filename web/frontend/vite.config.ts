@@ -21,8 +21,11 @@ export default defineConfig({
 	server: {
 		proxy: {
 			// The FastAPI backend (web/backend) is served separately in dev.
+			// Overridable so the e2e suite can point at the throwaway backend
+			// it launches itself (see playwright.config.ts) instead of
+			// whatever happens to be on the developer's 8000.
 			'/api': {
-				target: 'http://localhost:8000',
+				target: process.env.RENDERCV_API_TARGET ?? 'http://localhost:8000',
 				changeOrigin: true
 			}
 		}

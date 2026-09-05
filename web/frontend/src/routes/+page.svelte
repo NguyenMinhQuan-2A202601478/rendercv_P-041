@@ -39,7 +39,11 @@
 </svelte:head>
 
 <div class="min-h-screen bg-neutral-950 text-neutral-100">
-	<LandingNav providerAvailable={$authStatus.providerAvailable} />
+	<LandingNav
+		providerAvailable={$authStatus.providerAvailable}
+		authenticated={$authStatus.authenticated}
+		displayName={$authStatus.displayName ?? $authStatus.email}
+	/>
 	<main>
 		<LandingHero />
 		<ThemesStrip />

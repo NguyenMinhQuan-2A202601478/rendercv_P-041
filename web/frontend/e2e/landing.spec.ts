@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 /**
  * Phase 5c: the static landing page, served at `/` since Phase 6
@@ -61,7 +61,7 @@ test.describe('Landing page (/)', () => {
 		await expect(features.getByText('Form editor or YAML')).toBeVisible();
 		await expect(features.getByText('Live PDF preview')).toBeVisible();
 		await expect(features.getByText('Multilanguage support')).toBeVisible();
-		await expect(features.getByText('Your data stays local')).toBeVisible();
+		await expect(features.getByText('Your data stays on this server')).toBeVisible();
 
 		await expect(page.getByRole('img', { name: /five CV theme layouts/ })).toBeVisible();
 	});
@@ -95,7 +95,7 @@ test.describe('Landing page (/)', () => {
 		await expect(details).not.toHaveAttribute('open', '');
 		await question.click();
 		await expect(details).toHaveAttribute('open', '');
-		await expect(details.getByText(/anonymous device session/)).toBeVisible();
+		await expect(details.getByText(/not sent to any third-party service/)).toBeVisible();
 
 		await question.click();
 		await expect(details).not.toHaveAttribute('open', '');

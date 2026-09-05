@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { BACKEND_PORT, DATABASE_URL, TEST_SECRET } from './e2e/testAccount';
 
 const PORT = 5199;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -46,12 +47,32 @@ export default defineConfig({
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},
-	webServer: {
-		command: `npm run dev -- --port ${PORT} --strictPort`,
-		url: BASE_URL,
-		reuseExistingServer: false,
-		timeout: 60_000
-	},
+	// Both servers are the suite's own. Why the backend moved in here from
+	// a terminal the runner had to remember to open: it has to be started
+	// with a throwaway database and a known signing secret, and asking a
+	// person to do that by hand meant a mistake wrote e2e CVs into their
+	// real database. Playwright now owns both, and `npx playwright test`
+	// is the whole command again.
+	webServer: [
+		{
+			command: `uv run --frozen uvicorn rendercv_web.app:app --port ${BACKEND_PORT}`,
+			cwd: '../backend',
+			url: `http://localhost:${BACKEND_PORT}/api/themes`,
+			reuseExistingServer: false,
+			timeout: 120_000,
+			env: {
+				RENDERCV_WEB_DATABASE_URL: DATABASE_URL,
+				RENDERCV_WEB_SECRET: TEST_SECRET
+			}
+		},
+		{
+			command: `npm run dev -- --port ${PORT} --strictPort`,
+			url: BASE_URL,
+			reuseExistingServer: false,
+			timeout: 60_000,
+			env: { RENDERCV_API_TARGET: `http://localhost:${BACKEND_PORT}` }
+		}
+	],
 	projects: [
 		{
 			name: 'chromium',

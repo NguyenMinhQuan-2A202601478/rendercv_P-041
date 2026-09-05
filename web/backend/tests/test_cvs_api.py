@@ -14,8 +14,17 @@ Why:
 from collections.abc import Iterator
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from rendercv_web.app import app
+from rendercv_web.auth import (
+    SESSION_COOKIE_NAME,
+    encode_cookie,
+    generate_session_token,
+    resolve_secret,
+)
+from rendercv_web.db import repository
+from rendercv_web.db.models import User
 from rendercv_web.db.session import (
     build_session_factory,
     create_engine_from_url,
@@ -26,7 +35,9 @@ DEFAULT_CV_YAML = "cv:\n  name: John Doe\n  sections: {}\n"
 DEFAULT_SETTINGS_YAML = "settings:\n  pdf_title: NAME - CV\n"
 
 
-def make_client(tmp_path, monkeypatch, db_name: str = "test.db") -> TestClient:
+def make_client(
+    tmp_path, monkeypatch, db_name: str = "test.db", sign_in_as: str | None = "tester"
+) -> TestClient:
     """Build a `TestClient` wired to its own throwaway SQLite database.
 
     Args:
@@ -34,6 +45,9 @@ def make_client(tmp_path, monkeypatch, db_name: str = "test.db") -> TestClient:
         monkeypatch: pytest's monkeypatch fixture.
         db_name: File name for the throwaway database, so two clients in
             the same test can share (or not share) a database on purpose.
+        sign_in_as: Provider subject id to sign the client in as. `None`
+            leaves it anonymous, for the tests that assert an
+            unauthenticated caller is refused.
 
     Returns:
         A `TestClient` whose lifespan already ran migrations against the
@@ -57,12 +71,54 @@ def make_client(tmp_path, monkeypatch, db_name: str = "test.db") -> TestClient:
     app.dependency_overrides[get_session] = override_get_session
     client = TestClient(app)
     client.__enter__()
+    if sign_in_as is not None:
+        sign_client_in(client, session_factory, sign_in_as)
     return client
+
+
+def second_session_factory(tmp_path, db_name: str):
+    """Session factory on an existing throwaway database.
+
+    Why: the isolation tests need a *second account* on the *same* database
+    as the first client, to prove one account cannot read another's rows.
+    """
+    return build_session_factory(
+        create_engine_from_url(f"sqlite:///{tmp_path / db_name}")
+    )
+
+
+def sign_client_in(client: TestClient, session_factory, subject: str) -> None:
+    """Give `client` the cookie of a signed-in account.
+
+    Why it builds the row and the cookie directly instead of driving the
+    OAuth flow: `/api/cvs` and `/api/preferences` now require an account
+    (`auth.CurrentAccount`), and the only other way in is Google's consent
+    screen. Rather than add a test-only login endpoint -- an authentication
+    bypass that a misconfigured deployment could expose -- this uses the
+    same production code the callback uses, so nothing exists in the app
+    that would not exist without tests.
+
+    Args:
+        client: The client to sign in.
+        session_factory: Factory for sessions on the client's database.
+        subject: Provider subject id, so separate accounts stay distinct.
+    """
+    token = generate_session_token()
+    with session_factory() as session:
+        repository.create_account_user(
+            session,
+            token,
+            auth_provider="google",
+            auth_provider_id=subject,
+            email=f"{subject}@example.com",
+            display_name=subject,
+        )
+    client.cookies.set(SESSION_COOKIE_NAME, encode_cookie(token, resolve_secret()))
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
-    """A `TestClient` against a fresh per-test database, cookies enabled."""
+    """A `TestClient` against a fresh per-test database, signed in."""
     test_client = make_client(tmp_path, monkeypatch)
     try:
         yield test_client
@@ -79,13 +135,42 @@ def create_default_cv(client: TestClient, name: str = "My CV") -> dict:
 
 
 class TestSessionCookie:
-    """The signed session cookie: issued once, stable, and session-scoping."""
+    """The signed session cookie: what carries the account, and what happens without it."""
 
-    def test_first_request_issues_a_session_cookie(self, client: TestClient) -> None:
-        response = client.get("/api/cvs")
+    def test_an_anonymous_caller_is_refused(self, tmp_path, monkeypatch) -> None:
+        # `/api/cvs` holds a user's own documents, so a caller with no
+        # account is turned away rather than handed a new identity.
+        # Hiding the button in the UI would mean nothing if this returned
+        # data to anyone who called it directly.
+        anonymous = make_client(tmp_path, monkeypatch, sign_in_as=None)
+        try:
+            assert anonymous.get("/api/cvs").status_code == 401
+            assert anonymous.get("/api/preferences").status_code == 401
+        finally:
+            anonymous.__exit__(None, None, None)
+            app.dependency_overrides.pop(get_session, None)
 
-        assert response.status_code == 200
-        assert "rendercv_session" in response.cookies
+    def test_refusing_a_caller_creates_no_user_row(self, tmp_path, monkeypatch) -> None:
+        # A refusal must not leave anything behind: these endpoints are
+        # reachable by any bot, and minting a row per rejected probe would
+        # grow the table without limit.
+        anonymous = make_client(tmp_path, monkeypatch, sign_in_as=None)
+        try:
+            for _ in range(3):
+                anonymous.get("/api/cvs")
+
+            factory = second_session_factory(tmp_path, "test.db")
+            with factory() as session:
+                count = session.execute(
+                    sa.select(sa.func.count()).select_from(User)
+                ).scalar()
+            assert count == 0
+        finally:
+            anonymous.__exit__(None, None, None)
+            app.dependency_overrides.pop(get_session, None)
+
+    def test_a_signed_in_client_is_accepted(self, client: TestClient) -> None:
+        assert client.get("/api/cvs").status_code == 200
 
     def test_cookie_is_stable_across_requests(self, client: TestClient) -> None:
         client.get("/api/cvs")
@@ -103,6 +188,9 @@ class TestSessionCookie:
             create_default_cv(client_a, name="A's CV")
 
             client_b = TestClient(app, cookies={})
+            sign_client_in(
+                client_b, second_session_factory(tmp_path, "shared.db"), "other"
+            )
             try:
                 # A brand-new client with no cookie jar gets its own session.
                 response = client_b.get("/api/cvs")
@@ -286,6 +374,9 @@ class TestCrossSessionIsolation:
             created = create_default_cv(client_a, name="Private")
 
             client_b = TestClient(app, cookies={})
+            sign_client_in(
+                client_b, second_session_factory(tmp_path, "isolation.db"), "other"
+            )
             try:
                 response = client_b.get(f"/api/cvs/{created['id']}")
                 assert response.status_code == 404
@@ -327,6 +418,9 @@ class TestVersions:
             created = create_default_cv(client_a)
 
             client_b = TestClient(app, cookies={})
+            sign_client_in(
+                client_b, second_session_factory(tmp_path, "versions.db"), "other"
+            )
             try:
                 response = client_b.get(f"/api/cvs/{created['id']}/versions")
                 assert response.status_code == 404
@@ -436,6 +530,9 @@ class TestPreferences:
             client_a.put("/api/preferences", json={"key": "zoom", "value": "100"})
 
             client_b = TestClient(app, cookies={})
+            sign_client_in(
+                client_b, second_session_factory(tmp_path, "prefs.db"), "other"
+            )
             try:
                 assert client_b.get("/api/preferences").json() == {}
             finally:

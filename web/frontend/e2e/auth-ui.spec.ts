@@ -1,22 +1,27 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import { gotoReady } from './helpers';
 
 /**
- * Phase 6 wave 3: what the auth controls render in each state the server
- * can report.
+ * What the auth controls render in each state the server can report, and
+ * what `/app` does with someone who has no account.
  *
- * Why `/api/auth/me` is intercepted rather than really signing in: the real
- * flow ends at Google's consent screen, which a test cannot drive and which
- * needs credentials this repository does not have. The backend half of the
- * flow -- state checking, account resolution, the anonymous merge -- is
- * covered for real in `web/backend/tests/test_auth_api.py`. What is left to
- * prove here is only that the UI renders the right thing for each answer,
- * and that is exactly what the interception fixes.
+ * Why `/api/auth/me` is intercepted in most of these rather than really
+ * signing in: the real flow ends at Google's consent screen, which a test
+ * cannot drive and which needs credentials this repository does not have.
+ * The backend half -- state checking, account resolution, the anonymous
+ * merge -- is covered for real in `web/backend/tests/test_auth_api.py`.
+ * What is left to prove here is that the UI renders the right thing for
+ * each answer, and that is exactly what the interception fixes.
  *
  * Every case is intercepted, including the unconfigured one. Reading the
  * backend's real answer there would make the suite pass or fail based on
  * whether the person running it happens to have Google configured in their
  * own `.env`, which is not a property of the code under test.
+ *
+ * The one case that is *not* intercepted is the last describe block: a
+ * browser arriving with no session cookie at all. Nothing is faked there,
+ * because the point is what the real server does with a real stranger.
  */
 
 async function serveAuthStatus(
@@ -34,7 +39,7 @@ async function serveAuthStatus(
 }
 
 test.describe('Auth controls', () => {
-	test('a deployment without Google credentials offers no sign-in at all', async ({ page }) => {
+	test('a deployment without Google credentials cannot be entered at all', async ({ page }) => {
 		// Intercepted like the others rather than relying on the backend's own
 		// answer: a developer who has configured Google locally would
 		// otherwise fail this test purely because of their `.env`, which is
@@ -53,9 +58,12 @@ test.describe('Auth controls', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
 
-		await gotoReady(page);
+		await page.goto('/app');
+
+		// No dead sign-in button: with no provider there is nothing to press,
+		// so the gate names the missing configuration instead.
+		await expect(page.getByRole('heading', { name: 'Sign-in is not configured' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Sign in with Google' })).toHaveCount(0);
-		await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 	});
 
 	test('when sign-in is available the landing page offers it', async ({ page }) => {
@@ -73,7 +81,7 @@ test.describe('Auth controls', () => {
 		await expect(signIn).toHaveAttribute('href', '/api/auth/google/start');
 	});
 
-	test('the editor sidebar offers sign-in when nobody is signed in', async ({ page }) => {
+	test('the editor is gated behind sign-in, not merely decorated with it', async ({ page }) => {
 		await serveAuthStatus(page, {
 			authenticated: false,
 			email: null,
@@ -81,12 +89,51 @@ test.describe('Auth controls', () => {
 			provider_available: true
 		});
 
-		await gotoReady(page);
+		await page.goto('/app');
 
 		const signIn = page.getByRole('link', { name: 'Sign in with Google' });
 		await expect(signIn).toBeVisible();
 		await expect(signIn).toHaveAttribute('href', '/api/auth/google/start');
-		await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+
+		// The editor itself must be absent, not just hidden behind an
+		// overlay -- its controls would otherwise still be reachable by
+		// keyboard, and every one of them would 401.
+		await expect(page.getByRole('button', { name: 'Create new CV' })).toHaveCount(0);
+		await expect(page.getByTitle('CV PDF preview')).toHaveCount(0);
+	});
+
+	test('someone already signed in is not sent back through Google', async ({ page }) => {
+		// Offering "Sign in" to a live session is not just a redundant
+		// control: following it re-runs the whole authorization-code flow,
+		// and `/google/start` sends `prompt=select_account` (which is what
+		// makes switching accounts possible), so it puts Google's account
+		// chooser in front of someone who only wanted the editor. The way
+		// in for them is the editor link, which needs no round trip.
+		await serveAuthStatus(page, {
+			authenticated: true,
+			email: 'person@example.com',
+			display_name: 'A Person',
+			provider_available: true
+		});
+
+		await page.goto('/');
+
+		await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
+		await expect(page.getByTestId('signed-in-as')).toHaveText('A Person');
+		await expect(page.getByRole('link', { name: 'Open the editor' }).first()).toHaveAttribute(
+			'href',
+			'/app'
+		);
+	});
+
+	test('the editor link goes straight in for a signed-in visitor', async ({ page }) => {
+		// End to end on the real session rather than an intercepted status:
+		// landing page, one click, editor -- no Google, no gate.
+		await page.goto('/');
+		await page.getByRole('link', { name: 'Open the editor' }).first().click();
+
+		await expect(page.locator('[data-app-ready="true"]')).toHaveCount(1, { timeout: 15_000 });
+		await expect(page.getByRole('heading', { name: 'Sign in to open the editor' })).toHaveCount(0);
 	});
 
 	test('the editor sidebar shows who is signed in, and a way out', async ({ page }) => {
@@ -104,7 +151,7 @@ test.describe('Auth controls', () => {
 		await expect(page.getByRole('link', { name: 'Sign in with Google' })).toHaveCount(0);
 	});
 
-	test('signing out posts to the backend and returns to a signed-out view', async ({ page }) => {
+	test('signing out posts to the backend and returns to the gate', async ({ page }) => {
 		await serveAuthStatus(page, {
 			authenticated: true,
 			email: 'person@example.com',
@@ -130,5 +177,35 @@ test.describe('Auth controls', () => {
 
 		await expect(page.getByRole('link', { name: 'Sign in with Google' })).toBeVisible();
 		expect(logoutCalls).toBe(1);
+	});
+});
+
+test.describe('A browser with no session at all', () => {
+	// Nothing intercepted and no seeded cookie: this is the real server
+	// answering a real stranger, which is the only way to prove the gate is
+	// backed by the API refusing rather than by the UI choosing to hide.
+	test.use({ signedIn: false });
+
+	test('is sent to the gate instead of the editor', async ({ page }) => {
+		await page.goto('/app');
+
+		await expect(page.getByRole('heading', { name: /Sign in to open the editor|Sign-in is not configured/ })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Create new CV' })).toHaveCount(0);
+	});
+
+	test('is refused by the CV and preference endpoints', async ({ page }) => {
+		const cvs = await page.request.get('/api/cvs');
+		expect(cvs.status()).toBe(401);
+
+		const preferences = await page.request.get('/api/preferences');
+		expect(preferences.status()).toBe(401);
+	});
+
+	test('can still read the public endpoints the landing page needs', async ({ page }) => {
+		// The gate is on the user's data, not on the app. Locking these too
+		// would break the landing page for visitors who have not signed in --
+		// exactly the people it exists for.
+		expect((await page.request.get('/api/themes')).status()).toBe(200);
+		expect((await page.request.get('/api/auth/me')).status()).toBe(200);
 	});
 });

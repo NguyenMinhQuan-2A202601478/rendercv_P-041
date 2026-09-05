@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
@@ -71,16 +72,45 @@ test.describe('Theme switcher (tab bar, visible on every tab)', () => {
 
 		// The checkmark itself is `aria-hidden` (purely visual); the
 		// authoritative "this is the current one" signal is `aria-selected`.
-		const currentOption = listbox.getByRole('option', { name: 'classic', exact: true });
+		// The label is the display name (`themeDisplayName`), while the value
+		// written to `design.theme` stays the raw identifier -- the YAML
+		// assertions further down are what pin that half.
+		const currentOption = listbox.getByRole('option', { name: 'Classic', exact: true });
 		await expect(currentOption).toHaveAttribute('aria-selected', 'true');
 		await expect(currentOption).toContainText('✓');
-		await expect(listbox.getByRole('option', { name: 'ember', exact: true })).toHaveAttribute(
+		await expect(listbox.getByRole('option', { name: 'Ember', exact: true })).toHaveAttribute(
 			'aria-selected',
 			'false'
 		);
 
 		await page.keyboard.press('Escape');
 		await expect(listbox).not.toBeVisible();
+	});
+
+	test('cycling does not move the arrow that does the cycling', async ({ page }) => {
+		// The theme identifiers differ hugely in length (`ink` against
+		// `engineeringresumes`). With the value button sized to its content,
+		// every press of `›` resized it and shifted the `›` itself sideways,
+		// so a second press landed on empty space or on whatever had slid
+		// underneath the pointer -- cycling through nine themes was
+		// impossible without re-aiming each time. The box is asserted here
+		// rather than the CSS because the width utility is not the property
+		// that matters; where the button ends up is.
+		await gotoReady(page);
+		await firstPreviewUrl(page);
+
+		const next = page.getByRole('button', { name: 'Next Theme' });
+		const before = await next.boundingBox();
+		if (!before) throw new Error('the Next Theme button is not rendered');
+
+		// Walk the whole list back to the start: if any single label resizes
+		// the control, one of these positions differs.
+		for (let i = 0; i < 9; i += 1) {
+			await next.click();
+			const after = await next.boundingBox();
+			if (!after) throw new Error('the Next Theme button vanished mid-cycle');
+			expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+		}
 	});
 });
 

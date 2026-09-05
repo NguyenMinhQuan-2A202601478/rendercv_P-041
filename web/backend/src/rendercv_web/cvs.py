@@ -2,11 +2,14 @@
 
 Why:
     Phase 4b (docs/plans/completed/cv-editor-web-app.md): the sidebar's list of
-    saved CVs, the autosave write, and undo history, all scoped to the
-    anonymous session identified by `auth.CurrentUser`. Every read and
-    write is scoped to `current_user.id`; a CV id that exists but belongs to
-    someone else is treated exactly like a CV id that doesn't exist at all
-    (guardrail: never leak ownership via a 403).
+    saved CVs, the autosave write, and undo history. Every endpoint here
+    requires a signed-in account (`auth.CurrentAccount`, which refuses an
+    anonymous caller with a 401 rather than minting an identity for them),
+    because these are the endpoints holding a user's own documents.
+
+    Every read and write is scoped to `current_user.id`; a CV id that
+    exists but belongs to someone else is treated exactly like a CV id
+    that doesn't exist at all (guardrail: never leak ownership via a 403).
 """
 
 from typing import Annotated
@@ -14,7 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .auth import CurrentUser
+from .auth import CurrentAccount
 from .db import repository
 from .db.models import Cv
 from .db.session import get_session
@@ -159,7 +162,7 @@ def apply_update_result(
 
 
 @router.get("/api/cvs", response_model=list[CvSummary])
-def list_cvs(current_user: CurrentUser, session: SessionDep) -> list[CvSummary]:
+def list_cvs(current_user: CurrentAccount, session: SessionDep) -> list[CvSummary]:
     """List the current session's CVs, most recently updated first.
 
     Args:
@@ -176,7 +179,7 @@ def list_cvs(current_user: CurrentUser, session: SessionDep) -> list[CvSummary]:
 
 @router.post("/api/cvs", response_model=CvDetail, status_code=201)
 def create_cv(
-    request: CvCreateRequest, current_user: CurrentUser, session: SessionDep
+    request: CvCreateRequest, current_user: CurrentAccount, session: SessionDep
 ) -> CvDetail:
     """Create a new CV seeded with the editor's default documents.
 
@@ -207,7 +210,7 @@ def create_cv(
 
 
 @router.get("/api/cvs/{cv_id}", response_model=CvDetail)
-def get_cv(cv_id: int, current_user: CurrentUser, session: SessionDep) -> CvDetail:
+def get_cv(cv_id: int, current_user: CurrentAccount, session: SessionDep) -> CvDetail:
     """Fetch one CV, in full.
 
     Args:
@@ -231,7 +234,7 @@ def get_cv(cv_id: int, current_user: CurrentUser, session: SessionDep) -> CvDeta
 def update_cv(
     cv_id: int,
     request: CvUpdateRequest,
-    current_user: CurrentUser,
+    current_user: CurrentAccount,
     session: SessionDep,
 ) -> CvUpdateResponse:
     """Autosave a CV, iff it hasn't changed since the client last read it.
@@ -270,7 +273,7 @@ def update_cv(
 
 @router.post("/api/cvs/{cv_id}/duplicate", response_model=CvDetail, status_code=201)
 def duplicate_cv(
-    cv_id: int, current_user: CurrentUser, session: SessionDep
+    cv_id: int, current_user: CurrentAccount, session: SessionDep
 ) -> CvDetail:
     """Create a copy of a CV, named `Copy of {name}`.
 
@@ -300,7 +303,7 @@ def duplicate_cv(
 
 
 @router.delete("/api/cvs/{cv_id}", status_code=204)
-def delete_cv(cv_id: int, current_user: CurrentUser, session: SessionDep) -> None:
+def delete_cv(cv_id: int, current_user: CurrentAccount, session: SessionDep) -> None:
     """Delete a CV and its version history.
 
     Why:
@@ -325,7 +328,7 @@ def delete_cv(cv_id: int, current_user: CurrentUser, session: SessionDep) -> Non
 
 @router.get("/api/cvs/{cv_id}/versions", response_model=list[CvVersionSummary])
 def list_versions(
-    cv_id: int, current_user: CurrentUser, session: SessionDep
+    cv_id: int, current_user: CurrentAccount, session: SessionDep
 ) -> list[CvVersionSummary]:
     """List a CV's autosave snapshots, newest first.
 
@@ -356,7 +359,7 @@ def list_versions(
 def restore_version(
     cv_id: int,
     version_id: int,
-    current_user: CurrentUser,
+    current_user: CurrentAccount,
     session: SessionDep,
 ) -> CvUpdateResponse:
     """Restore a version snapshot as a new autosave write.

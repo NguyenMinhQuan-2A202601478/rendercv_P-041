@@ -42,13 +42,20 @@ in `.env` locally and in the deployment's own secret store in production.
 In [Google Cloud Console](https://console.cloud.google.com):
 
 1. Create or select a project.
-2. **APIs & Services → OAuth consent screen**: User type **External**; fill in
-   app name and the two email fields. No scopes need adding — `openid email
-   profile` is requested by the application and needs no configuration here.
-   While the app is in Testing, add your own address under **Test users**, or
-   sign-in will be refused.
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
-   type **Web application**, and add the redirect URI for the environment:
+2. **Google Auth Platform → Branding**: fill in the app name and the two
+   email fields (*User support email* and *Developer contact information*).
+   Leave the logo and every *App domain* field empty — a logo forces the app
+   through verification, and the domain fields need a domain you have
+   registered under *Authorized domains*. Under **Data Access**, nothing
+   needs adding: `openid email profile` are requested by the application at
+   run time and are all non-sensitive.
+
+   The Console section is named *Google Auth Platform* and splits Branding,
+   Audience and Clients into separate pages; older documentation (including
+   earlier revisions of this file) calls it *APIs & Services → OAuth consent
+   screen*, which no longer exists.
+3. **Google Auth Platform → Clients → Create client**, type **Web
+   application**, and add the redirect URI for the environment:
 
    | Environment | Authorized redirect URI |
    | --- | --- |
@@ -64,15 +71,25 @@ In [Google Cloud Console](https://console.cloud.google.com):
    Both environments need their own entry; adding the production URI does
    not cover localhost.
 
-4. Back on **OAuth consent screen**, press **Publish app** once sign-in
-   works end to end. Left in Testing, Google refuses everyone outside the
-   *Test users* list *on Google's own screen* -- the request never reaches
-   this server, so no amount of application code can soften it, and since the
-   editor requires an account that is a locked door. The three scopes this
-   app requests (`openid email profile`) are all non-sensitive, so publishing
-   does not go through Google's verification review; read the warning the
-   Console shows when you press it to confirm, as Google moves this around.
-   Testing also caps the list at 100 users.
+4. Let other people in by adding their addresses under **Audience → Test
+   users**. Left in Testing, Google refuses everyone outside that list *on
+   Google's own screen* -- the request never reaches this server, so no
+   amount of application code can soften it, and since the editor requires
+   an account that is a locked door. The project owner is the exception and
+   signs in even with an empty list, which is why verifying this needs a
+   second Google account. The list holds 100 addresses and takes effect
+   immediately.
+
+5. **Publishing to production is a separate job that needs a deployment, so
+   it is not part of this local setup.** Google refuses to switch an app out
+   of Testing until *Branding* carries a valid **homepage url** and
+   **privacy policy url**, and those must live on a domain registered under
+   *Authorized domains* -- `localhost` cannot satisfy either. The button
+   stays greyed out with a tooltip saying exactly that. Come back to this
+   after the app is deployed, and **remove the logo from *Branding* first**:
+   a logo forces the app through Google's verification review, which the
+   three scopes it requests (`openid email profile`, all non-sensitive)
+   would otherwise not require.
 
 ### Local run with sign-in enabled
 
@@ -235,9 +252,12 @@ anonymous session's CV.
   unknown -- see **Deterministic State** -- but a managed provider adds
   TLS and network policy that a local server does not exercise.
 - The production domain, and so the production redirect URI.
-- Whether publishing behaves as documented. The app requests only
-  non-sensitive scopes, which per Google's policy publish without a
-  verification review -- but sign-in here has only ever been exercised as a
-  listed test user under Testing, so the published path is unproven.
+- Everything past the publish gate. The Console refuses to switch the app
+  to production without a homepage and privacy-policy URL on an authorized
+  domain (confirmed 2026-09-06 by reading the disabled button's tooltip), so
+  nothing beyond that point -- whether the non-sensitive scopes really skip
+  verification, what a stranger's first consent screen looks like -- has
+  been observed. Sign-in has only ever run as the project owner under
+  Testing.
 - Where the deployment stores secrets; this runbook assumes environment
   variables and does not choose a secret manager.

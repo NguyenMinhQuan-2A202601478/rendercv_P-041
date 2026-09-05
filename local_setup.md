@@ -118,19 +118,23 @@ Cổng là **5173** (frontend), không phải 8000 — trình duyệt phải qua
 origin đang giữ cookie phiên. Từng bước chi tiết:
 [`docs/runbooks/enable-google-sign-in-and-postgres.md`](docs/runbooks/enable-google-sign-in-and-postgres.md).
 
-> **Nhớ publish app.** Google Cloud Console → *APIs & Services → OAuth
-> consent screen* → nút **Publish app**. Chưa publish thì app ở chế độ
-> *Testing*, và Google **chặn ngay trên màn hình của Google** mọi email
-> không nằm trong danh sách *Test users* — app của mình không hề nhận được
-> request nào, nên không có cách nào xử lý phía code.
+> **Muốn người khác đăng nhập được thì thêm email của họ vào *Test users*.**
+> Google Cloud Console → *Google Auth Platform* → **Audience** → mục *Test
+> users* → **Add users** → gõ địa chỉ Gmail → Save. Có hiệu lực ngay, không
+> phải chờ duyệt.
 >
-> App này chỉ xin ba scope `openid email profile`, đều là non-sensitive, nên
-> publish không phải qua quy trình verification của Google. Đọc dòng cảnh báo
-> Console hiện ra lúc bấm để xác nhận — Google hay đổi chỗ này.
+> "Test users" nghe như phải đi tìm người thử nghiệm, nhưng thực ra chỉ là
+> **danh sách email được phép đăng nhập**. Người được thêm không nhận thông
+> báo gì và không phải làm gì cả. Danh sách chứa tối đa 100 địa chỉ, thừa
+> cho một dự án môn học.
 >
-> Cứ để *Testing* chỉ hợp lý khi đang phát triển một mình: danh sách bị giới
-> hạn 100 người, và vì editor bắt buộc đăng nhập, ai không có tên trong đó là
-> không dùng được app.
+> Bạn — chủ project — luôn đăng nhập được kể cả khi danh sách trống. Nên
+> muốn nghiệm thu thật thì phải dùng một tài khoản Google khác; tài khoản
+> chính của bạn vào được trong mọi trường hợp nên không chứng minh được gì.
+>
+> Ai **không** có trong danh sách sẽ bị Google chặn ngay trên màn hình của
+> Google — app của mình không hề nhận được request nào, nên không có cách
+> nào xử lý phía code.
 
 `.env` đã được gitignore. `.env.example` thì không — đừng bao giờ đặt giá trị
 thật vào file mẫu.

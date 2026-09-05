@@ -254,15 +254,25 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 GOOGLE_OAUTH_REDIRECT_URI=https://<tên-miền-của-bạn>/api/auth/google/callback
 ```
 
-Sau khi tạo xong OAuth client, **publish app**: *OAuth consent screen* →
-**Publish app**. Chưa publish thì app nằm ở chế độ *Testing* và Google chặn
-mọi email ngoài danh sách *Test users* **ngay trên màn hình của Google** --
-request không bao giờ tới server này, nên không có gì phía code xử lý được.
-Vì editor bắt buộc đăng nhập, đó là chặn hẳn đường vào app.
+App mới tạo nằm ở chế độ **Testing**. Google chặn mọi email ngoài danh
+sách *Test users* ngay trên màn hình của Google -- request không bao giờ tới
+server này, nên không có gì phía code xử lý được. Chủ project là ngoại lệ:
+họ luôn đăng nhập được kể cả khi danh sách trống.
 
-Ba scope app xin (`openid email profile`) đều là non-sensitive, nên publish
-không cần qua verification của Google. Chế độ *Testing* chỉ hợp lý khi đang
-phát triển một mình -- nó còn bị giới hạn 100 test user.
+Cho người khác vào bằng cách thêm email của họ: *Google Auth Platform* →
+**Audience** → *Test users* → **Add users**. Danh sách chứa 100 địa chỉ và
+có hiệu lực ngay.
+
+**Publish (chuyển sang *In production*) cần một domain công khai**, nên nó
+không phải bước làm được từ máy local. Google đòi *homepage url* và
+*privacy policy url* hợp lệ trước khi cho chuyển, và hai URL đó phải thuộc
+một domain khai trong *Authorized domains* -- `localhost` không dùng được.
+Để publish thì phải deploy trước; xem [Deploy](#deploy).
+
+Khi tới lúc đó, **gỡ logo trong *Branding* trước khi publish**: Google bắt
+app có logo phải qua verification, trừ khi đang ở Testing. Bản thân ba scope
+app xin (`openid email profile`) đều non-sensitive nên không cần
+verification.
 
 ### Phiên và tài khoản hoạt động thế nào
 
@@ -332,8 +342,7 @@ lúc khởi động.
 Nếu frontend và API phục vụ **cùng một origin** (reverse proxy đưa `/api`
 về backend), bỏ qua mục này.
 
-Nếu **khác origin** (ví dụ frontend trên Vercel, backend trên Railway), phải
-khai báo origin của frontend:
+Nếu **khác origin**, khai báo origin của frontend:
 
 ```
 RENDERCV_WEB_ALLOWED_ORIGINS=https://cv.example.com
@@ -343,6 +352,25 @@ Cookie phiên gửi kèm `credentials`, nên trình duyệt sẽ **từ chối**
 request nếu origin không khớp chính xác. Triệu chứng rất dễ gây hiểu lầm:
 trang tải bình thường nhưng không đăng nhập được và không lưu được gì, dấu
 vết duy nhất là lỗi CORS trong console.
+
+> **Nhưng khai CORS thôi thì chưa đủ, và mục này từng gợi ý là đủ.** Cookie
+> phiên đặt `SameSite=Lax` (`auth.py`, `oauth.py`), nên trình duyệt **không
+> gửi cookie** trong request `fetch` sang site khác. CORS cho request đi
+> qua, `SameSite` vẫn giữ cookie lại: đăng nhập xong là mất phiên ngay, và
+> console không báo lỗi CORS nào để lần ra.
+>
+> Lưu ý `vercel.app` nằm trong Public Suffix List, nên `a.vercel.app` và
+> `b.vercel.app` là **hai site khác nhau** -- để cả hai trên Vercel cũng
+> không thoát được.
+>
+> Vì vậy **một origin duy nhất là cấu hình deploy nên chọn**: một host phục
+> vụ frontend đã build và mở API ở `/api` cùng domain. Muốn thật sự tách
+> origin thì phải đổi cookie sang `SameSite=None; Secure` -- một thay đổi
+> bảo mật cần cân nhắc, chưa làm.
+>
+> Proxy `/api` trong `vite.config.ts` chỉ chạy ở **dev server**; bản build
+> production không có nó. Chưa có Dockerfile hay cấu hình adapter cho
+> deployment một-origin -- đó là việc còn phải làm.
 
 ## Đọc tiếp ở đâu
 

@@ -24,6 +24,7 @@ from .cvs import router as cvs_router
 from .db.migrate import upgrade_to_head
 from .documents import apply_patch_ops, to_json_safe
 from .errors import register_exception_handlers
+from .frontend import mount_frontend
 from .limits import enforce_documents_size_cap, enforce_yaml_size_cap
 from .models import (
     CvDocumentsRequest,
@@ -253,3 +254,10 @@ def patch_document(request: PatchRequest) -> PatchResponse:
     enforce_yaml_size_cap(request.yaml)
     updated_yaml = apply_patch_ops(request.yaml, request.ops)
     return PatchResponse(yaml=updated_yaml)
+
+
+# Registered last, and it must stay last: `mount_frontend` adds a catch-all
+# route that matches every path, so any endpoint declared after it would be
+# unreachable. It is a no-op in development, where Vite serves the frontend
+# and proxies `/api` here instead.
+mount_frontend(app)

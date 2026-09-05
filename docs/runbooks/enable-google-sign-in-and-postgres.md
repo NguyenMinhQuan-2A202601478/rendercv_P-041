@@ -61,8 +61,18 @@ In [Google Cloud Console](https://console.cloud.google.com):
    mismatch fails with `redirect_uri_mismatch` before the application is ever
    reached.
 
-Both environments need their own entry; adding the production URI does not
-cover localhost.
+   Both environments need their own entry; adding the production URI does
+   not cover localhost.
+
+4. Back on **OAuth consent screen**, press **Publish app** once sign-in
+   works end to end. Left in Testing, Google refuses everyone outside the
+   *Test users* list *on Google's own screen* -- the request never reaches
+   this server, so no amount of application code can soften it, and since the
+   editor requires an account that is a locked door. The three scopes this
+   app requests (`openid email profile`) are all non-sensitive, so publishing
+   does not go through Google's verification review; read the warning the
+   Console shows when you press it to confirm, as Google moves this around.
+   Testing also caps the list at 100 users.
 
 ### Local run with sign-in enabled
 
@@ -225,8 +235,9 @@ anonymous session's CV.
   unknown -- see **Deterministic State** -- but a managed provider adds
   TLS and network policy that a local server does not exercise.
 - The production domain, and so the production redirect URI.
-- Whether the Google app will stay in Testing (its user list is capped and
-  restricted to named test users) or go through verification. Sign-in has
-  only been exercised as a listed test user.
+- Whether publishing behaves as documented. The app requests only
+  non-sensitive scopes, which per Google's policy publish without a
+  verification review -- but sign-in here has only ever been exercised as a
+  listed test user under Testing, so the published path is unproven.
 - Where the deployment stores secrets; this runbook assumes environment
   variables and does not choose a secret manager.

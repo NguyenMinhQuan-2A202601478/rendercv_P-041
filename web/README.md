@@ -86,8 +86,8 @@ Muốn Postgres thì thêm `uv sync --extra postgres` ở `web/backend` (xem m�
 > đúng những lệnh này ở dạng PowerShell, kèm cách xem log và cách gỡ khi
 > cổng bị chiếm.
 
-Sao chép file mẫu biến môi trường (có thể bỏ qua nếu chỉ chạy ẩn danh trên
-SQLite -- mọi biến đều tuỳ chọn):
+Sao chép file mẫu biến môi trường. **Không bỏ qua bước này**: editor yêu
+cầu đăng nhập, nên thiếu credentials Google là không vào được editor:
 
 ```
 cd web/backend
@@ -102,8 +102,8 @@ uv run --env-file .env uvicorn rendercv_web.app:app --port 8000
 ```
 
 > `--env-file .env` là phần dễ bỏ sót nhất. Thiếu nó thì backend không đọc
-> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`, và giao diện đăng nhập sẽ bị ẩn dù bạn
-> đã điền đúng vào `.env`. Chưa tạo `.env` thì bỏ luôn cờ này đi.
+> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` dù bạn đã điền đúng vào `.env`, và
+> `/app` sẽ hiện "Sign-in is not configured" thay vì editor.
 
 ```
 cd web/frontend
@@ -119,8 +119,15 @@ Schema database được migrate **tự động khi backend khởi động**
 `web/backend/data/rendercv_web.db` (SQLite) tương đối theo thư mục làm việc
 hiện tại.
 
-Ứng dụng không có đăng nhập: một cookie đã ký cấp cho mỗi trình duyệt một
-phiên ẩn danh, và các CV thuộc về phiên đó.
+**Editor yêu cầu tài khoản.** `/api/cvs` và `/api/preferences` từ chối
+người gọi chưa đăng nhập (401), và `/app` hiện màn hình đăng nhập thay vì
+editor. Trang landing, `/api/themes` và `/api/schema` vẫn mở cho mọi người.
+
+Không có bước đăng ký riêng: lần đầu và những lần sau đều bấm cùng một nút
+"Sign in with Google"; server tự phân biệt bằng việc identity Google đó đã
+gắn với tài khoản nào chưa. Lý do bắt buộc tài khoản: CV được lưu theo tài
+khoản nên còn nguyên ở lần truy cập sau và trên máy khác, thay vì buộc vào
+đúng một trình duyệt.
 
 ## Cấu hình
 
@@ -136,7 +143,7 @@ trị thật vào đó.
 | `RENDERCV_WEB_SECRET` | *(giá trị dev không an toàn)* | Dùng để ký cookie phiên. **Bắt buộc phải đặt trước khi deploy** -- xem mục [Deploy](#deploy). |
 | `RENDERCV_WEB_HTTPS` | *(tắt)* | Đặt `1` khi phục vụ qua HTTPS để cookie phiên có cờ `Secure`. |
 | `RENDERCV_WEB_ALLOWED_ORIGINS` | `http://localhost:5173` | Origin được phép gọi API, ngăn cách bằng dấu phẩy. Chỉ cần khi frontend khác origin với API. |
-| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(chưa đặt)* | Bật đăng nhập Google. Chưa đặt thì giao diện đăng nhập bị ẩn hoàn toàn. |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(chưa đặt)* | **Bắt buộc.** Chưa đặt thì không ai vào được editor -- `/app` báo thẳng là deployment thiếu cấu hình. |
 
 ## Kiểm thử
 
@@ -165,35 +172,32 @@ npm run test
 npm run build
 ```
 
-**End-to-end (Playwright).** Bộ test này điều khiển trình duyệt thật, gọi
-vào backend thật, nên backend phải đang chạy -- và đây là chỗ duy nhất mà
-làm sai sẽ mất dữ liệu:
-
-> **Luôn trỏ backend của e2e vào một database dùng-một-lần.** Chạy bộ test
-> vào `web/backend/data/rendercv_web.db` mặc định sẽ ghi CV test vào dữ liệu
-> phát triển của bạn, đồng thời làm các test phụ thuộc thứ tự bootstrap
-> chập chờn.
-
-PowerShell:
-
-```
-$env:RENDERCV_WEB_DATABASE_URL = "sqlite:///$env:TEMP/rendercv_e2e.db"
-cd web/backend
-uv run uvicorn rendercv_web.app:app --port 8000
-```
-
-Rồi ở terminal khác:
+**End-to-end (Playwright).** Một lệnh, không cần chuẩn bị gì:
 
 ```
 cd web/frontend
 npm run test:e2e
 ```
 
-Playwright tự dựng frontend **riêng** ở cổng 5199 (không phải 5173) nên
-không tranh cổng với dev server bạn đang mở. Nó chạy `workers: 1` một cách
-có chủ đích: backend dev chỉ là một tiến trình uvicorn duy nhất, và các lần
-render Typst nặng CPU sẽ làm nghẽn chính event loop của nó khi chạy song
-song.
+Playwright tự dựng **cả hai** server của riêng nó: backend ở cổng 8100 với
+một database dùng-một-lần trong thư mục temp, và frontend ở cổng 5199. Dev
+server 5173/8000 bạn đang mở không bị đụng tới, và bộ test **không thể** ghi
+vào database thật của bạn.
+
+> Trước đây bước này bắt bạn tự mở backend kèm `RENDERCV_WEB_DATABASE_URL`
+> trỏ vào database tạm. Quên biến đó một lần là CV test ghi thẳng vào dữ
+> liệu phát triển -- nên việc đó nay do Playwright làm.
+
+Vì editor yêu cầu tài khoản, `e2e/global-setup.ts` tạo sẵn một *pool* tài
+khoản trong database tạm (chạy code repository thật qua
+`e2e/seedAccount.py`), và mỗi test nhận một tài khoản riêng qua
+`e2e/fixtures.ts`. Không có endpoint đăng nhập dành cho test nào được thêm
+vào server -- một endpoint như vậy là đường vòng qua xác thực, chỉ cách một
+lỗi cấu hình là ai cũng gọi được.
+
+Bộ test chạy `workers: 1` một cách có chủ đích: backend chỉ là một tiến
+trình uvicorn duy nhất, và các lần render Typst nặng CPU sẽ làm nghẽn chính
+event loop của nó khi chạy song song.
 
 ## Tuỳ chọn: xem trước phía client (WASM)
 
@@ -221,14 +225,14 @@ từ CDN jsdelivr, và vài dependency Python thuần nhỏ được lấy từ 
 chạy. Khởi động nguội mất khoảng 17-20 giây; các lần render sau khi đã nóng
 máy dưới một giây.
 
-## Đăng nhập Google (tuỳ chọn)
+## Đăng nhập Google (bắt buộc)
 
-Ứng dụng chạy đầy đủ mà không cần đăng nhập -- phiên ẩn danh theo cookie là
-mặc định. Bật đăng nhập chỉ thêm một khả năng: dùng chung CV giữa nhiều
-trình duyệt và thiết bị.
+Editor chỉ mở cho người đã đăng nhập, nên đây không còn là tuỳ chọn: chưa
+cấu hình OAuth client thì không ai dùng được editor.
 
-Khi chưa cấu hình, backend báo `provider_available: false` và giao diện **ẩn
-toàn bộ** nút đăng nhập -- không có nút chết.
+Khi chưa cấu hình, backend báo `provider_available: false`, landing page ẩn
+nút đăng nhập, và `/app` hiện thẳng "Sign-in is not configured" kèm tên hai
+biến còn thiếu -- không có nút chết, và người vận hành không phải đoán.
 
 Tạo OAuth client ở [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
 chọn *Create credentials* → *OAuth client ID* → *Web application*, rồi khai
@@ -250,12 +254,22 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 GOOGLE_OAUTH_REDIRECT_URI=https://<tên-miền-của-bạn>/api/auth/google/callback
 ```
 
+Sau khi tạo xong OAuth client, **publish app**: *OAuth consent screen* →
+**Publish app**. Chưa publish thì app nằm ở chế độ *Testing* và Google chặn
+mọi email ngoài danh sách *Test users* **ngay trên màn hình của Google** --
+request không bao giờ tới server này, nên không có gì phía code xử lý được.
+Vì editor bắt buộc đăng nhập, đó là chặn hẳn đường vào app.
+
+Ba scope app xin (`openid email profile`) đều là non-sensitive, nên publish
+không cần qua verification của Google. Chế độ *Testing* chỉ hợp lý khi đang
+phát triển một mình -- nó còn bị giới hạn 100 test user.
+
 ### Phiên và tài khoản hoạt động thế nào
 
 | Tình huống | Điều xảy ra |
 | --- | --- |
-| Đăng nhập lần đầu | CV đã soạn khi còn ẩn danh **được gộp vào tài khoản**, không mất gì |
-| Đăng nhập ở trình duyệt thứ hai | CV soạn ẩn danh ở máy đó được chuyển vào tài khoản đã có |
+| Đăng nhập lần đầu | Tạo tài khoản luôn, không có form đăng ký riêng |
+| Trình duyệt còn CV ẩn danh từ bản deploy cũ | CV đó **được gộp vào tài khoản**, không mất gì |
 | Đang đăng nhập rồi đăng nhập bằng **tài khoản Google khác** | Chuyển tài khoản sạch sẽ: tài khoản cũ **không bị đụng tới**, CV của nó vẫn thuộc về nó |
 | Đăng xuất | **Thoát trên mọi thiết bị**, không chỉ trình duyệt hiện tại |
 

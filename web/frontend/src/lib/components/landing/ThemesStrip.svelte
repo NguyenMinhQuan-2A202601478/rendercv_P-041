@@ -1,20 +1,15 @@
 <script lang="ts">
 	/**
 	 * The 9 built-in themes as pill badges (mirrors the reference's "N themes"
-	 * strip). Names match `src/rendercv/schema/models/design/` exactly:
-	 * `classic_theme.py` plus the 8 files under `other_themes/`.
+	 * strip).
+	 *
+	 * Why the names come from `$lib/themes/displayName` rather than a list
+	 * written out here: this strip used to carry its own spelling of all
+	 * nine, while the editor's theme switcher showed the raw identifiers,
+	 * so the same theme went by two names in one app with nothing keeping
+	 * them in step. Both now read from the same place.
 	 */
-	const themes = [
-		'Classic',
-		'Sb2nov',
-		'Moderncv',
-		'Engineering Resumes',
-		'Engineering Classic',
-		'Harvard',
-		'Ink',
-		'Opal',
-		'Ember'
-	];
+	import { BUILT_IN_THEME_NAMES, themeDisplayName } from '$lib/themes/displayName';
 </script>
 
 <section class="border-t border-white/10 bg-neutral-950 py-14" aria-labelledby="themes-heading">
@@ -27,12 +22,12 @@
 			extra install.
 		</p>
 		<ul class="mt-6 flex flex-wrap items-center justify-center gap-2">
-			{#each themes as theme, i (theme)}
+			{#each BUILT_IN_THEME_NAMES as theme, i (theme)}
 				<li
 					class="reveal rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-sm text-neutral-200"
 					style={`animation-delay:${i * 60}ms`}
 				>
-					{theme}
+					{themeDisplayName(theme)}
 				</li>
 			{/each}
 		</ul>

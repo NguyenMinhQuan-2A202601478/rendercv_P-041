@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import SignInGate from '$lib/components/SignInGate.svelte';
 	import EditorPane from '$lib/components/EditorPane.svelte';
 	import PreviewPane from '$lib/components/PreviewPane.svelte';
 	import Splitter from '$lib/components/Splitter.svelte';
@@ -67,10 +69,14 @@
 
 	const prefWriter = createPreferenceWriter();
 
-	// Account state for the sidebar's footer strip. Fetched alongside
-	// bootstrap rather than blocking it: the editor is fully usable signed
-	// out, so nothing here waits on knowing who you are.
+	// Account state, for the gate below and the sidebar's footer strip.
 	const authStatus = auth.status;
+
+	// Whether this visitor may open the editor at all. `null` while the
+	// answer is still in flight, so the first paint shows neither the
+	// editor nor the gate -- flashing "sign in" at someone who is signed
+	// in would be worse than a moment of nothing.
+	let signedIn = $state<boolean | null>(null);
 
 	// Validate is the authoritative source for inline error placement (it
 	// always includes yaml_source); if it hasn't reported anything wrong yet
@@ -141,11 +147,21 @@
 	}
 
 	onMount(() => {
-		// Not awaited with bootstrap: the editor is fully usable signed out,
-		// so knowing who you are must never delay the CV loading.
-		void auth.refresh();
-
 		void (async () => {
+			// Awaited before bootstrap, not alongside it: `/api/cvs` and
+			// `/api/preferences` refuse callers without an account, so
+			// loading first would spend two round trips to arrive at 401 and
+			// then report it as "Failed to load your CVs" -- an error message
+			// about the wrong thing entirely.
+			await auth.refresh();
+			signedIn = get(authStatus).authenticated;
+			if (!signedIn) {
+				// Nothing is loading, so the loading state has to end here or
+				// the gate would never get to render.
+				bootstrapping.set(false);
+				return;
+			}
+
 			try {
 				const preferences = await getPreferences();
 				const result = await bootstrapApp({ listCvs, createCv, getCv, getPreferences: async () => preferences });
@@ -221,7 +237,9 @@
 	class="flex h-screen w-screen overflow-hidden bg-white text-neutral-900 dark:bg-[var(--surface)] dark:text-neutral-100"
 	data-app-ready={bootstrapReady && !bootstrapError ? 'true' : 'false'}
 >
-	{#if $bootstrapping}
+	{#if signedIn === false}
+		<SignInGate providerAvailable={$authStatus.providerAvailable} />
+	{:else if $bootstrapping}
 		<div class="flex flex-1 items-center justify-center" role="status" aria-live="polite">
 			<span class="text-sm text-neutral-500 dark:text-neutral-400">Loading your CVs…</span>
 		</div>

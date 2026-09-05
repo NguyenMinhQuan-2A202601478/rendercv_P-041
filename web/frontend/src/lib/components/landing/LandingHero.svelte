@@ -19,8 +19,8 @@
 			description: 'Locale-aware date formats and translated section headings, built into the Locale tab.'
 		},
 		{
-			title: 'Your data stays local',
-			description: 'An anonymous device session and a local database — no account, no third-party sharing.'
+			title: 'Your data stays on this server',
+			description: 'Sign in with Google, and your CVs live in the database this deployment owns — nothing is sent to a third-party service.'
 		}
 	];
 </script>
@@ -38,7 +38,8 @@
 			</h1>
 			<p class="mt-5 max-w-xl text-lg text-neutral-400">
 				Write your CV in plain YAML or a guided form, preview the typeset PDF as you go, and
-				export publication-quality output rendered by Typst — self-hosted, no account required.
+				export publication-quality output rendered by Typst — self-hosted, and your CVs saved
+				to your account.
 			</p>
 
 			<ul class="mt-10 space-y-5" aria-label="Key features">

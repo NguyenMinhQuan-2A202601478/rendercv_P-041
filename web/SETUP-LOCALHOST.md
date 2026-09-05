@@ -24,11 +24,11 @@ uv run --env-file .env uvicorn rendercv_web.app:app --port 8000
 ```
 
 > **`--env-file .env` là phần dễ quên nhất.** Thiếu nó, backend không đọc
-> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`, và giao diện đăng nhập sẽ **bị ẩn**
-> dù bạn đã điền đúng vào `.env` — trông y như tính năng bị hỏng.
+> `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` dù bạn đã điền đúng vào `.env`, và
+> `/app` sẽ hiện "Sign-in is not configured" thay vì editor.
 >
-> Chưa có `.env`? Chạy `Copy-Item .env.example .env` rồi mở ra điền. Nếu
-> chỉ cần chạy ẩn danh trên SQLite thì bỏ luôn cờ này.
+> Chưa có `.env`? Chạy `Copy-Item .env.example .env` rồi mở ra điền. Editor
+> **bắt buộc đăng nhập**, nên không còn đường chạy mà bỏ qua bước này.
 
 ### Terminal 2 — Frontend (cổng 5173)
 
@@ -41,7 +41,8 @@ npm run dev
 ```
 
 Mở <http://localhost:5173>. Trang chủ là landing; editor ở
-<http://localhost:5173/app>.
+<http://localhost:5173/app> và **yêu cầu đăng nhập** — chưa đăng nhập thì
+`/app` hiện màn hình đăng nhập chứ không phải editor.
 
 Frontend proxy `/api` sang cổng 8000, nên **thiếu backend là editor không
 tải được CV nào**.
@@ -100,25 +101,7 @@ npm run test
 
 ### End-to-end (Playwright)
 
-> **Bắt buộc dùng database dùng-một-lần.** Chạy e2e vào database mặc định
-> `web/backend/data/rendercv_web.db` sẽ ghi CV test vào dữ liệu thật của
-> bạn và làm các test phụ thuộc thứ tự bootstrap chập chờn.
-
-Terminal 1 — backend riêng cho test:
-
-```powershell
-Set-Location "C:\AI Thuc Chien\PROJECT\rendercv_P-041\web\backend"
-```
-
-```powershell
-$env:RENDERCV_WEB_DATABASE_URL = "sqlite:///$env:TEMP/rendercv_e2e.db"
-```
-
-```powershell
-uv run uvicorn rendercv_web.app:app --port 8000
-```
-
-Terminal 2:
+Một terminal, một lệnh, không cần chuẩn bị gì:
 
 ```powershell
 Set-Location "C:\AI Thuc Chien\PROJECT\rendercv_P-041\web\frontend"
@@ -128,15 +111,19 @@ Set-Location "C:\AI Thuc Chien\PROJECT\rendercv_P-041\web\frontend"
 npx playwright test
 ```
 
-Playwright tự dựng frontend **riêng ở cổng 5199**, không dùng cổng 5173 —
-nên dev server bạn đang mở không bị ảnh hưởng.
+Playwright tự dựng **cả hai** server của riêng nó: backend ở **cổng 8100**
+với database dùng-một-lần trong `%TEMP%`, và frontend ở **cổng 5199**. Dev
+server 5173/8000 bạn đang mở không bị đụng tới, và bộ test **không thể** ghi
+vào database thật.
 
-Xong nhớ mở terminal mới hoặc gỡ biến, kẻo lần sau chạy backend lại trỏ
-vào database tạm:
+> Trước đây mục này bắt bạn tự mở backend kèm `RENDERCV_WEB_DATABASE_URL`
+> trỏ vào database tạm, rồi nhớ gỡ biến đó đi. Quên một lần là CV test ghi
+> thẳng vào dữ liệu thật — nên việc đó nay do Playwright làm.
 
-```powershell
-Remove-Item Env:\RENDERCV_WEB_DATABASE_URL
-```
+Vì editor bắt buộc đăng nhập, bộ test tự tạo sẵn tài khoản trong database
+tạm (`e2e/global-setup.ts` → `e2e/seedAccount.py`) và phát cho mỗi test một
+tài khoản riêng. Bạn không cần credentials Google để chạy e2e.
+
 
 ## Xem log
 
@@ -163,6 +150,7 @@ Vài dòng log hay gặp và ý nghĩa:
 | Dòng log | Nghĩa |
 | --- | --- |
 | `RENDERCV_WEB_SECRET is not set` | Bình thường khi chạy local; **bắt buộc phải đặt trước khi deploy** |
+| `GET /api/cvs 401` | Chưa đăng nhập — đúng như thiết kế, editor sẽ hiện màn hình đăng nhập |
 | `PUT /api/cvs/{id} 200` | Autosave thành công |
 | `PUT /api/cvs/{id} 409` | Xung đột — CV bị sửa ở nơi khác, giao diện sẽ hiện thanh hoà giải |
 | `PUT /api/cvs/{id} 404` | Trang cũ đang lưu vào một CV không còn tồn tại (hay gặp khi vừa đổi database) |
@@ -207,11 +195,12 @@ Ba nguồn chiếm cổng thường gặp, theo thứ tự dễ bỏ sót:
 
 ## Đăng nhập Google trên localhost
 
-Không bắt buộc — ứng dụng chạy đầy đủ ở chế độ ẩn danh.
+**Bắt buộc để dùng editor.** Điền `GOOGLE_OAUTH_CLIENT_ID` và
+`GOOGLE_OAUTH_CLIENT_SECRET` vào `web/backend/.env`, khởi động backend **có
+`--env-file .env`**, rồi mở <http://localhost:5173/app>.
 
-Muốn bật: điền `GOOGLE_OAUTH_CLIENT_ID` và `GOOGLE_OAUTH_CLIENT_SECRET` vào
-`web/backend/.env`, khởi động backend **có `--env-file .env`**, rồi mở
-<http://localhost:5173/app>.
+Chỉ chạy `npx playwright test` thì không cần bước này — bộ e2e tự tạo tài
+khoản trong database tạm của nó.
 
 Redirect URI phải khai báo trong Google Cloud Console **đúng từng ký tự**:
 

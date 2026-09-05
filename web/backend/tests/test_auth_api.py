@@ -15,11 +15,19 @@ Why there is no real Google here:
 
 from collections.abc import Iterator
 
+import httpx
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from rendercv_web import oauth
 from rendercv_web.app import app
+from rendercv_web.auth import (
+    SESSION_COOKIE_NAME,
+    encode_cookie,
+    generate_session_token,
+    resolve_secret,
+)
+from rendercv_web.db import repository
 from rendercv_web.db.models import User
 from rendercv_web.db.session import (
     build_session_factory,
@@ -75,6 +83,55 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
         app.dependency_overrides.pop(get_session, None)
 
 
+SEEDED_CV_YAML = "cv:\n  name: Seeded\n  sections: {}\n"
+
+
+def seed_anonymous_session(
+    client: TestClient,
+    tmp_path,
+    db_name: str = "auth.db",
+    cvs: tuple = (),
+    prefs: dict | None = None,
+) -> None:
+    """Give `client` an anonymous session that already owns data.
+
+    Why this seeds the database directly rather than posting to the API:
+    `/api/cvs` and `/api/preferences` now require an account, so an
+    anonymous caller can no longer create anything through them. The
+    state still exists in the world, though -- any deployment that ran
+    before accounts were required has users whose CVs sit on an anonymous
+    row, and the merge on first sign-in is what carries that work across.
+    These tests cover that path, so they have to build the state the way
+    it really arose.
+
+    Args:
+        client: The client whose cookie should point at the seeded session.
+        tmp_path: pytest's per-test temporary directory.
+        db_name: The throwaway database the client is wired to.
+        cvs: Names of CVs the anonymous session owns.
+        prefs: Preferences the anonymous session has set.
+    """
+    factory = build_session_factory(
+        create_engine_from_url(f"sqlite:///{tmp_path / db_name}")
+    )
+    token = generate_session_token()
+    with factory() as session:
+        user = repository.get_or_create_user_by_token(session, token)
+        for name in cvs:
+            repository.create_cv(
+                session,
+                user.id,
+                name=name,
+                cv_yaml=SEEDED_CV_YAML,
+                design_yaml="",
+                locale_yaml="",
+                settings_yaml="",
+            )
+        for key, value in (prefs or {}).items():
+            repository.set_preference(session, user.id, key, value)
+    client.cookies.set(SESSION_COOKIE_NAME, encode_cookie(token, resolve_secret()))
+
+
 def patch_identity(
     monkeypatch,
     subject: str = "google-subject-1",
@@ -99,7 +156,7 @@ def patch_identity(
     monkeypatch.setattr(oauth, "fetch_google_identity", fake_fetch)
 
 
-def sign_in(client: TestClient, code: str = "auth-code") -> None:
+def sign_in(client: TestClient, code: str = "auth-code") -> httpx.Response:
     """Run a full start -> callback sign-in against the patched identity.
 
     Why it goes through `/google/start` rather than forging the state
@@ -108,6 +165,9 @@ def sign_in(client: TestClient, code: str = "auth-code") -> None:
     Args:
         client: The client to sign in.
         code: The authorization code to present on the callback.
+
+    Returns:
+        The callback response, whose `Set-Cookie` carries the issued token.
     """
     start = client.get("/api/auth/google/start", follow_redirects=False)
     assert start.status_code == 307
@@ -118,6 +178,7 @@ def sign_in(client: TestClient, code: str = "auth-code") -> None:
         follow_redirects=False,
     )
     assert callback.status_code == 303, callback.text
+    return callback
 
 
 def count_users() -> int:
@@ -246,10 +307,10 @@ class TestAnonymousWorkIsKept:
     """Signing in must never lose the CVs written before signing in."""
 
     def test_first_sign_in_keeps_the_anonymous_session_cvs(
-        self, client: TestClient, monkeypatch
+        self, client: TestClient, tmp_path, monkeypatch
     ) -> None:
         patch_identity(monkeypatch)
-        client.post("/api/cvs", json={"name": "Written while anonymous"})
+        seed_anonymous_session(client, tmp_path, cvs=("Written while anonymous",))
 
         sign_in(client)
 
@@ -257,10 +318,10 @@ class TestAnonymousWorkIsKept:
         assert names == ["Written while anonymous"]
 
     def test_signing_in_again_on_the_same_browser_is_idempotent(
-        self, client: TestClient, monkeypatch
+        self, client: TestClient, tmp_path, monkeypatch
     ) -> None:
         patch_identity(monkeypatch)
-        client.post("/api/cvs", json={"name": "Only copy"})
+        seed_anonymous_session(client, tmp_path, cvs=("Only copy",))
         sign_in(client)
 
         sign_in(client, code="second-code")
@@ -278,14 +339,18 @@ class TestAnonymousWorkIsKept:
 
         first = make_client(tmp_path, monkeypatch, db_name="shared.db")
         try:
-            first.post("/api/cvs", json={"name": "From browser one"})
+            seed_anonymous_session(
+                first, tmp_path, "shared.db", cvs=("From browser one",)
+            )
             sign_in(first)
         finally:
             first.__exit__(None, None, None)
 
         second = TestClient(app, cookies={})
         try:
-            second.post("/api/cvs", json={"name": "From browser two"})
+            seed_anonymous_session(
+                second, tmp_path, "shared.db", cvs=("From browser two",)
+            )
             sign_in(second, code="second-browser-code")
 
             names = sorted(cv["name"] for cv in second.get("/api/cvs").json())
@@ -302,15 +367,18 @@ class TestAnonymousWorkIsKept:
 
         first = make_client(tmp_path, monkeypatch, db_name="prefs.db")
         try:
-            first.put("/api/preferences", json={"key": "ui_theme", "value": "dark"})
+            seed_anonymous_session(
+                first, tmp_path, "prefs.db", prefs={"ui_theme": "dark"}
+            )
             sign_in(first)
         finally:
             first.__exit__(None, None, None)
 
         second = TestClient(app, cookies={})
         try:
-            second.put("/api/preferences", json={"key": "ui_theme", "value": "light"})
-            second.put("/api/preferences", json={"key": "zoom", "value": "125"})
+            seed_anonymous_session(
+                second, tmp_path, "prefs.db", prefs={"ui_theme": "light", "zoom": "125"}
+            )
             sign_in(second, code="second-browser-code")
 
             preferences = second.get("/api/preferences").json()
@@ -331,10 +399,10 @@ class TestAccountSwitching:
     """
 
     def test_switching_to_a_new_identity_leaves_the_first_account_intact(
-        self, client: TestClient, monkeypatch
+        self, client: TestClient, tmp_path, monkeypatch
     ) -> None:
         patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
-        client.post("/api/cvs", json={"name": "CV of Alice"})
+        seed_anonymous_session(client, tmp_path, cvs=("CV of Alice",))
         sign_in(client)
 
         patch_identity(monkeypatch, subject="g-bob", email="bob@example.com")
@@ -356,7 +424,7 @@ class TestAccountSwitching:
         patch_identity(monkeypatch, subject="g-bob", email="bob@example.com")
         first = make_client(tmp_path, monkeypatch, db_name="switch.db")
         try:
-            first.post("/api/cvs", json={"name": "CV of Bob"})
+            seed_anonymous_session(first, tmp_path, "switch.db", cvs=("CV of Bob",))
             sign_in(first)
         finally:
             first.__exit__(None, None, None)
@@ -364,7 +432,7 @@ class TestAccountSwitching:
         second = TestClient(app, cookies={})
         try:
             patch_identity(monkeypatch, subject="g-alice", email="alice@example.com")
-            second.post("/api/cvs", json={"name": "CV of Alice"})
+            seed_anonymous_session(second, tmp_path, "switch.db", cvs=("CV of Alice",))
             sign_in(second, code="alice-code")
 
             # Alice, signed in, now signs in as Bob on her own machine.
@@ -387,18 +455,22 @@ class TestSessionTokenLifecycle:
     """A token must not outlive the privilege level it was issued under."""
 
     def test_signing_in_replaces_the_pre_authentication_token(
-        self, client: TestClient, monkeypatch
+        self, client: TestClient, tmp_path, monkeypatch
     ) -> None:
         # Session fixation: whoever used this browser before signing in may
         # know the anonymous token, and it must not keep working against
         # the account afterwards.
         patch_identity(monkeypatch)
-        client.get("/api/cvs")  # mint the anonymous session
+        seed_anonymous_session(client, tmp_path)
         anonymous_cookie = client.cookies["rendercv_session"]
 
-        sign_in(client)
+        issued = sign_in(client)
 
-        assert client.cookies["rendercv_session"] != anonymous_cookie
+        # The new cookie is read off the response rather than the jar: the
+        # seeded cookie was stored without a domain and the server's comes
+        # back host-only, so the jar holds two entries under this name and
+        # indexing it raises. The response carries exactly one.
+        assert issued.cookies[SESSION_COOKIE_NAME] != anonymous_cookie
 
         stale = TestClient(app, cookies={"rendercv_session": anonymous_cookie})
         assert stale.get("/api/auth/me").json()["authenticated"] is False
@@ -418,17 +490,23 @@ class TestSessionTokenLifecycle:
         assert replayed.get("/api/auth/me").json()["authenticated"] is False
 
     def test_signing_out_anonymously_keeps_the_session_reachable(
-        self, client: TestClient
+        self, client: TestClient, tmp_path, monkeypatch
     ) -> None:
-        # An anonymous token is the only route back to that session's CVs,
-        # so rotating it would strand work rather than protect anything.
-        client.post("/api/cvs", json={"name": "Anonymous work"})
+        # An anonymous token is the only handle left on the CVs an older
+        # deployment let that session write, so rotating it on logout would
+        # strand the work rather than protect anything. Reachability is
+        # asserted by signing in afterwards -- since accounts became
+        # required that is the only way those CVs can be read again, and it
+        # is exactly the journey a returning user makes.
+        seed_anonymous_session(client, tmp_path, cvs=("Anonymous work",))
         cookie = client.cookies["rendercv_session"]
 
         client.post("/api/auth/logout")
 
-        still_there = TestClient(app, cookies={"rendercv_session": cookie})
-        assert [cv["name"] for cv in still_there.get("/api/cvs").json()] == [
+        patch_identity(monkeypatch)
+        returning = TestClient(app, cookies={"rendercv_session": cookie})
+        sign_in(returning)
+        assert [cv["name"] for cv in returning.get("/api/cvs").json()] == [
             "Anonymous work"
         ]
 

@@ -17,7 +17,7 @@ import os
 import secrets
 from typing import Annotated
 
-from fastapi import Cookie, Depends, Response
+from fastapi import Cookie, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from .db import repository
@@ -177,3 +177,48 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_current_account(
+    session: Annotated[Session, Depends(get_session)],
+    rendercv_session: Annotated[str | None, Cookie()] = None,
+) -> User:
+    """Resolve the signed-in account for this request, or refuse it.
+
+    Why this exists next to `get_current_user`: that dependency *creates*
+    an anonymous row for any caller, which is what makes the editor usable
+    without an account. Endpoints holding a user's own data need the
+    opposite -- a caller with no account must be turned away, not handed a
+    brand-new identity.
+
+    Why it resolves the cookie by hand instead of depending on
+    `get_current_user` and checking afterwards: doing it that way would
+    still mint a row and a year-long cookie before rejecting the request,
+    so every unauthenticated probe would grow the `users` table. A refusal
+    must not leave anything behind.
+
+    Args:
+        session: The database session.
+        rendercv_session: The raw session cookie, if the client sent one.
+
+    Returns:
+        The `User` row for the signed-in account.
+
+    Raises:
+        HTTPException: 401 when the caller has no session, an unknown
+            session, or a session that has never been signed in.
+    """
+    token = (
+        decode_cookie(rendercv_session, resolve_secret()) if rendercv_session else None
+    )
+    user = repository.get_user_by_token(session, token) if token else None
+
+    if user is None or user.auth_provider is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Sign in to use this endpoint.",
+        )
+    return user
+
+
+CurrentAccount = Annotated[User, Depends(get_current_account)]

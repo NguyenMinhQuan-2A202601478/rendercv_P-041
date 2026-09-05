@@ -1,9 +1,11 @@
 """UI-state preferences: `GET`/`PUT /api/preferences`.
 
 Why:
-    Session-scoped key/value pairs (yaml-mode toggle, zoom, sidebar state,
+    Account-scoped key/value pairs (yaml-mode toggle, zoom, sidebar state,
     ...) the frontend reads back on load (docs/plans/completed/cv-editor-web-app.md,
-    Phase 4).
+    Phase 4). Like `/api/cvs`, these belong to a signed-in account and use
+    `auth.CurrentAccount`, so an anonymous caller gets a 401 instead of a
+    new identity.
 """
 
 from typing import Annotated
@@ -11,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .auth import CurrentUser
+from .auth import CurrentAccount
 from .db import repository
 from .db.session import get_session
 from .models import PreferenceUpdateRequest
@@ -22,7 +24,9 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 
 @router.get("/api/preferences", response_model=dict[str, str])
-def get_preferences(current_user: CurrentUser, session: SessionDep) -> dict[str, str]:
+def get_preferences(
+    current_user: CurrentAccount, session: SessionDep
+) -> dict[str, str]:
     """List the current session's UI preferences.
 
     Args:
@@ -39,7 +43,7 @@ def get_preferences(current_user: CurrentUser, session: SessionDep) -> dict[str,
 
 @router.put("/api/preferences", status_code=204)
 def set_preference(
-    request: PreferenceUpdateRequest, current_user: CurrentUser, session: SessionDep
+    request: PreferenceUpdateRequest, current_user: CurrentAccount, session: SessionDep
 ) -> None:
     """Upsert one UI preference for the current session.
 

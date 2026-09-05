@@ -1,18 +1,19 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
  * End-to-end coverage for Phase 5b: the light/dark theme toggle.
  *
- * Why `context.clearCookies()` + clearing the localStorage mirror in
- * `beforeEach`: the session-cookie-scoped `ui_theme` preference (and the
- * `rendercv.uiTheme` localStorage mirror) would otherwise leak between
- * tests/runs -- every test in this file starts from a known light-mode,
- * no-saved-preference state, matching a first-time visitor.
+ * Why the `rendercv.uiTheme` localStorage mirror is cleared in
+ * `beforeEach`: every test here starts from a known light-mode,
+ * no-saved-preference state, matching a first-time visitor. The server
+ * side of that preference needs nothing -- each test gets its own account
+ * (`e2e/fixtures.ts`), so it has no saved `ui_theme` to begin with. This
+ * used to call `context.clearCookies()` for the same reason, which now
+ * would only sign the test out.
  */
 test.describe('Dark mode toggle', () => {
-	test.beforeEach(async ({ page, context }) => {
-		await context.clearCookies();
+	test.beforeEach(async ({ page }) => {
 		await page.addInitScript(() => window.localStorage.removeItem('rendercv.uiTheme'));
 	});
 

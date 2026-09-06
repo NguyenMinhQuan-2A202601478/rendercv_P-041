@@ -2,6 +2,7 @@ import { request as playwrightRequest, type APIRequestContext } from '@playwrigh
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { resetAccountCursor } from './fixtures';
 import { ACCOUNT_POOL_SIZE, DATABASE_URL, TEST_SECRET } from './testAccount';
 
 const PORT = 5199;
@@ -71,6 +72,9 @@ function seedAccountPool(): void {
  */
 export default async function globalSetup(): Promise<void> {
 	seedAccountPool();
+	// The cursor is a file, so last run's would otherwise carry over and
+	// start this one part-way through the pool.
+	resetAccountCursor();
 
 	const context = await playwrightRequest.newContext({ baseURL: BASE_URL });
 	try {

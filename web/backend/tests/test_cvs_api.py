@@ -30,9 +30,18 @@ from rendercv_web.db.session import (
     create_engine_from_url,
     get_session,
 )
+from rendercv_web.defaults import (
+    default_cv_yaml,
+    default_design_yaml,
+    default_locale_yaml,
+    default_settings_yaml,
+)
 
-DEFAULT_CV_YAML = "cv:\n  name: John Doe\n  sections: {}\n"
-DEFAULT_SETTINGS_YAML = "settings:\n  pdf_title: NAME - CV\n"
+# Asserted against the generator rather than a copy of its output: the
+# sample is the core's to change, and a literal here would turn any such
+# change into a test failure that says nothing about this API.
+DEFAULT_CV_YAML = default_cv_yaml()
+DEFAULT_SETTINGS_YAML = default_settings_yaml()
 
 
 def make_client(
@@ -216,8 +225,11 @@ class TestCvCrud:
 
         assert body["name"] == "My CV"
         assert body["documents"]["cv_yaml"] == DEFAULT_CV_YAML
-        assert body["documents"]["design_yaml"] == ""
-        assert body["documents"]["locale_yaml"] == ""
+        # Design and locale used to be seeded empty. They now carry the
+        # theme's own values, spelled out, so the panes open on something a
+        # user can edit rather than on nothing -- see `defaults`.
+        assert body["documents"]["design_yaml"] == default_design_yaml()
+        assert body["documents"]["locale_yaml"] == default_locale_yaml()
         assert body["documents"]["settings_yaml"] == DEFAULT_SETTINGS_YAML
         assert "id" in body
         assert "updated_at" in body

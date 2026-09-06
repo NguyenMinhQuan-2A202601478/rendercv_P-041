@@ -28,17 +28,27 @@ async function setYamlMode(page: Page, on: boolean): Promise<void> {
 }
 
 test.describe('Theme switcher (tab bar, visible on every tab)', () => {
-	test('cycling with the next-theme arrow patches only design.theme; the YAML stays minimal and the preview re-renders', async ({
+	test('switching theme rewrites the design document with the new theme\'s values', async ({
 		page
 	}) => {
+		// This used to patch only the `theme:` line, which was right when a
+		// fresh design document was blank -- the named theme supplied
+		// everything else. It is wrong now that the starter document spells
+		// out every option at the starting theme's values: those explicit
+		// values win over the name, so renaming the theme produced a
+		// byte-identical PDF. Measured before the fix: classic and ember
+		// rendered to the same SHA-256.
 		await gotoReady(page);
 		const initialPreviewUrl = await firstPreviewUrl(page);
 
 		await goToTab(page, 'Design');
 		await setYamlMode(page, true);
 
-		// A fresh CV's design document is blank.
-		expect((await yamlText(page)).trim()).toBe('');
+		// A fresh CV's design document is filled in, not blank.
+		const before = await yamlText(page);
+		expect(before).toMatch(/theme:\s*classic/);
+		expect(before).toMatch(/page:/);
+		expect(before).toMatch(/bottom_margin:\s*0\.7in/); // classic's
 
 		await page.getByRole('button', { name: 'Next Theme' }).click();
 
@@ -46,9 +56,15 @@ test.describe('Theme switcher (tab bar, visible on every tab)', () => {
 			.poll(async () => yamlText(page), { timeout: 20_000 })
 			.toMatch(/theme:\s*ember/);
 
-		const designYaml = await yamlText(page);
-		// Minimal: only the theme line, nothing else (no page/colors/... keys).
-		expect(designYaml).not.toMatch(/page:|colors:|typography:/);
+		const after = await yamlText(page);
+		// Still a full document -- the block was replaced, not emptied.
+		expect(after).toMatch(/page:/);
+		expect(after).toMatch(/colors:/);
+		// And a value that differs between the two themes really moved. Without
+		// this the test would pass on a switcher that changed only the name,
+		// which is exactly the bug it exists to catch.
+		expect(after).toMatch(/bottom_margin:\s*0\.6in/); // ember's
+		expect(after).not.toMatch(/bottom_margin:\s*0\.7in/);
 
 		await expect
 			.poll(async () => (await page.getByTitle('CV PDF preview').getAttribute('src')) ?? '', {
@@ -115,9 +131,7 @@ test.describe('Theme switcher (tab bar, visible on every tab)', () => {
 });
 
 test.describe('Design form: effective-value overlay', () => {
-	test('an override survives a theme switch while a non-overridden sibling field visibly changes; resetting removes it', async ({
-		page
-	}) => {
+	test('a form edit reaches the YAML', async ({ page }) => {
 		await gotoReady(page);
 		await firstPreviewUrl(page);
 
@@ -125,35 +139,51 @@ test.describe('Design form: effective-value overlay', () => {
 		await setYamlMode(page, false);
 
 		const topMargin = page.getByLabel('Top Margin', { exact: true });
-		const bottomMargin = page.getByLabel('Bottom Margin', { exact: true });
 		await expect(topMargin).toBeVisible({ timeout: 20_000 });
-
-		const bottomMarginBefore = await bottomMargin.inputValue();
-		expect(bottomMarginBefore).toBe('0.7'); // classic's default
 
 		await topMargin.fill('0.5');
 		await topMargin.blur();
 
 		await setYamlMode(page, true);
-		await expect.poll(async () => yamlText(page), { timeout: 20_000 }).toMatch(/top_margin:\s*0\.5in/);
+		await expect
+			.poll(async () => yamlText(page), { timeout: 20_000 })
+			.toMatch(/top_margin:\s*0\.5in/);
+	});
 
-		// Switch theme (classic -> ember): the override must survive, and the
-		// un-overridden bottom_margin must now reflect ember's default.
-		await page.getByRole('button', { name: 'Next Theme' }).click();
-		await expect.poll(async () => yamlText(page), { timeout: 20_000 }).toMatch(/theme:\s*ember/);
-		expect(await yamlText(page)).toMatch(/top_margin:\s*0\.5in/);
+	test('switching theme replaces design edits, which is the accepted cost', async ({
+		page
+	}) => {
+		// The opposite of what this file asserted before, and deliberately
+		// so. While a fresh design document was blank, an edit was the only
+		// thing in it and a theme switch could leave it alone. Now the
+		// document holds every option, and the switcher has to replace the
+		// whole block or the new theme has no effect at all -- so an edit
+		// goes with it. Keeping edits would mean telling apart values the
+		// user chose from values that merely came with the old theme, and
+		// the document does not record that difference.
+		await gotoReady(page);
+		await firstPreviewUrl(page);
 
+		await goToTab(page, 'Design');
 		await setYamlMode(page, false);
-		await expect.poll(async () => bottomMargin.inputValue(), { timeout: 20_000 }).not.toBe(bottomMarginBefore);
-		await expect.poll(async () => bottomMargin.inputValue()).toBe('0.6'); // ember's default
-		await expect(topMargin).toHaveValue('0.5'); // the override itself is unaffected by the theme switch
 
-		// Reset the override: the "reset to default" affordance next to the label.
-		await page.getByRole('button', { name: 'Reset Top Margin to the theme default' }).click();
+		const topMargin = page.getByLabel('Top Margin', { exact: true });
+		await expect(topMargin).toBeVisible({ timeout: 20_000 });
+		await topMargin.fill('0.5');
+		await topMargin.blur();
 
 		await setYamlMode(page, true);
-		await expect.poll(async () => yamlText(page), { timeout: 20_000 }).not.toMatch(/top_margin/);
-		expect(await yamlText(page)).toMatch(/theme:\s*ember/); // the theme override is untouched by the reset
+		await expect
+			.poll(async () => yamlText(page), { timeout: 20_000 })
+			.toMatch(/top_margin:\s*0\.5in/);
+
+		await page.getByRole('button', { name: 'Next Theme' }).click();
+
+		await expect
+			.poll(async () => yamlText(page), { timeout: 20_000 })
+			.toMatch(/theme:\s*ember/);
+		// Gone, replaced by ember's own top margin.
+		expect(await yamlText(page)).not.toMatch(/top_margin:\s*0\.5in/);
 	});
 });
 

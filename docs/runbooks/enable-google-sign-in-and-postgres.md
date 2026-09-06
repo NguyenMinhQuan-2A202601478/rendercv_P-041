@@ -268,17 +268,9 @@ error anywhere in that sequence.
 
 ## Unknowns
 
-Three of the four entries here were answered by the deployment on
-2026-09-06; what is left is narrower.
+Most of what stood here was answered by the deployment on 2026-09-06. Two
+entries are left, and neither is about whether the thing runs.
 
-- **Whether the deployment is really on Postgres.** `render.yaml` wires
-  `RENDERCV_WEB_DATABASE_URL` from the managed database, and signing in
-  wrote a row -- so *a* database works, migrations ran, and writes succeed.
-  But the code falls back to a SQLite file when that variable is missing,
-  and a container on SQLite behaves identically until it restarts, at which
-  point every CV is gone. Nothing observed from outside distinguishes the
-  two. Settle it by restarting the service and signing in again: the CVs
-  survive on Postgres and do not on SQLite.
 - **Everything past the publish gate.** The Console refuses to switch the
   app to production without a homepage and privacy-policy URL on an
   authorized domain (confirmed 2026-09-06 by reading the disabled button's
@@ -294,6 +286,16 @@ Three of the four entries here were answered by the deployment on
 
 Answered, and recorded here so the next reader does not re-open them:
 
+- **The deployment really is on Postgres**, confirmed 2026-09-06 by
+  restarting the service and signing in again: the CVs were still there.
+  That test is the one worth repeating on any new deployment, because the
+  failure it rules out is invisible until it happens. The code falls back
+  to a SQLite file when `RENDERCV_WEB_DATABASE_URL` is missing, and a
+  container on SQLite behaves exactly like one on Postgres -- until it
+  restarts with a fresh filesystem and every CV is gone. A successful
+  sign-in proves only that *a* database accepted a write; it does not say
+  which. On Render's free plan the service sleeps after fifteen minutes of
+  no traffic, so on SQLite that loss would happen several times a day.
 - The Postgres provider is Render's managed database, connected by
   `render.yaml` rather than by a pasted connection string, so its TLS and
   network policy never had to be worked out by hand.

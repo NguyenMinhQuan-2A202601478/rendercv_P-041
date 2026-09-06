@@ -136,7 +136,9 @@ class TestServingTheBuild:
         response = client.get("/_app/immutable/entry.abc123.js")
 
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert (
+            response.headers["cache-control"] == "public, max-age=31536000, immutable"
+        )
 
     def test_other_files_are_not_marked_immutable(self, client: TestClient) -> None:
         # `robots.txt` keeps its name across deploys, so freezing it for a

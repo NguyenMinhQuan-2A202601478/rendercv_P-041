@@ -47,20 +47,27 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1
 
+# The account is created before anything is copied so that every `COPY` can
+# name it. The previous version copied as root and ran `chown -R` at the
+# end, which cost 291 MB: changing a file's owner rewrites it into a new
+# layer, so that one command duplicated nearly everything under `/app`.
+RUN groupadd --system --gid 999 rendercv \
+ && useradd --system --gid 999 --uid 999 --no-create-home rendercv
+
 WORKDIR /app
 
 # The core first: the backend declares it as an editable path dependency, so
 # its source tree has to be here before `uv sync` runs.
-COPY pyproject.toml uv.lock README.md ./
-COPY src/ ./src/
+COPY --chown=rendercv:rendercv pyproject.toml uv.lock README.md ./
+COPY --chown=rendercv:rendercv src/ ./src/
 
 # `README.md` is not documentation ballast here: the backend's
 # `pyproject.toml` declares it as the package readme, so the build fails
 # without it.
-COPY web/backend/pyproject.toml web/backend/uv.lock web/backend/README.md ./web/backend/
-COPY web/backend/alembic.ini ./web/backend/
-COPY web/backend/src/ ./web/backend/src/
-COPY web/backend/migrations/ ./web/backend/migrations/
+COPY --chown=rendercv:rendercv web/backend/pyproject.toml web/backend/uv.lock web/backend/README.md ./web/backend/
+COPY --chown=rendercv:rendercv web/backend/alembic.ini ./web/backend/
+COPY --chown=rendercv:rendercv web/backend/src/ ./web/backend/src/
+COPY --chown=rendercv:rendercv web/backend/migrations/ ./web/backend/migrations/
 
 WORKDIR /app/web/backend
 
@@ -68,9 +75,17 @@ WORKDIR /app/web/backend
 # dies at startup the moment `RENDERCV_WEB_DATABASE_URL` names Postgres,
 # which is the intended configuration for anything deployed -- SQLite in a
 # container is lost on every restart.
-RUN uv sync --frozen --extra postgres --no-dev
+# `--no-cache` because the cache is of no use once the environment exists,
+# and it stays in the image otherwise: 219 MB of the same wheels the
+# `.venv` already holds. It costs nothing at build time either -- each
+# build on the host starts from an empty cache regardless.
+#
+# `--chown` on the venv: `uv` runs as root here, and the app reads the
+# environment as `rendercv`.
+RUN uv sync --frozen --extra postgres --no-dev --no-cache \
+ && chown -R rendercv:rendercv /app/web/backend/.venv
 
-COPY --from=frontend /build/build/ /app/web/frontend-build/
+COPY --from=frontend --chown=rendercv:rendercv /build/build/ /app/web/frontend-build/
 
 # Read by `rendercv_web.frontend`. Left unset, the backend serves the API
 # only and every page 404s -- which is correct in development, where Vite
@@ -80,10 +95,8 @@ ENV RENDERCV_WEB_FRONTEND_DIR=/app/web/frontend-build \
 
 # Nothing here needs root, and a container that drops it limits what a
 # compromise of the render pipeline could reach. Following the root
-# Dockerfile's lead.
-RUN groupadd --system --gid 999 rendercv \
- && useradd --system --gid 999 --uid 999 --no-create-home rendercv \
- && chown -R rendercv:rendercv /app
+# Dockerfile's lead. The account itself was created above, before the
+# copies, so that no recursive `chown` is needed to hand `/app` over.
 USER rendercv
 
 # Render and most container hosts inject the port to listen on. The default

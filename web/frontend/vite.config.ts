@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import tailwindcss from '@tailwindcss/vite';
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
@@ -12,10 +12,22 @@ export default defineConfig({
 				runes: ({ filename }) => filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
-			adapter: adapter()
+			// Built as static files that the FastAPI backend serves itself, so
+			// the app and its API share one origin. That is not a packaging
+			// preference: the session cookie is `SameSite=Lax`, which a
+			// browser withholds from cross-site `fetch`, so a frontend on a
+			// different host than the API would sign in and lose the session
+			// on the very next request -- with no CORS error to explain it.
+			//
+			// `fallback` puts everything that is not prerendered into SPA
+			// mode: the server hands back `index.html` and the client router
+			// resolves the route. `/app` needs that; it is an editor whose
+			// content comes entirely from the API.
+			// The fallback is deliberately not named `index.html`: that is where
+			// the prerendered landing page lands, and SvelteKit overwrites it
+			// with the empty shell if both claim the name -- silently undoing
+			// the prerender, with only a build-log line to say so.
+			adapter: adapter({ fallback: 'fallback.html' })
 		})
 	],
 	server: {

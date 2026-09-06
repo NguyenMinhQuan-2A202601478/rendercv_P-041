@@ -300,6 +300,66 @@ Hai dòng cuối đáng chú ý:
 > [`docs/runbooks/enable-google-sign-in-and-postgres.md`](../docs/runbooks/enable-google-sign-in-and-postgres.md).
 > Mục dưới đây là phần tra cứu.
 
+### Một origin duy nhất, không phải hai
+
+**Frontend và API phải nằm chung một origin.** Đây không phải sở thích đóng
+gói mà là ràng buộc kỹ thuật: cookie phiên đặt `SameSite=Lax`, nên trình
+duyệt **không gửi cookie** trong request `fetch` sang site khác. Tách frontend
+và API ra hai host thì đăng nhập vẫn thành công rồi mất phiên ngay ở request
+kế tiếp — và không cấu hình CORS nào cứu được, vì CORS cho request đi qua còn
+`SameSite` giữ cookie lại. Không có lỗi CORS nào hiện ra để lần dấu vết.
+
+Lưu ý `vercel.app` nằm trong Public Suffix List, nên `a.vercel.app` và
+`b.vercel.app` cũng là **hai site khác nhau** — để cả hai trên Vercel không
+thoát được.
+
+Vì vậy [`web/Dockerfile`](Dockerfile) đóng gói cả hai vào một image: frontend
+build ra file tĩnh, backend phục vụ chúng cùng lúc với `/api`.
+
+```
+git submodule update --init --recursive
+docker build -f web/Dockerfile -t rendercv-web .
+docker run -p 8000:8000 -e RENDERCV_WEB_SECRET=... rendercv-web
+```
+
+**Build context là thư mục gốc repository, không phải `web/`** — backend phụ
+thuộc core dưới dạng editable path dependency nên cần cả cây nguồn của core,
+và cần submodule `typst_fontawesome` để render PDF.
+
+Đừng nhầm với `Dockerfile` ở thư mục gốc: đó là image của **CLI** RenderCV
+thượng nguồn, việc khác hẳn.
+
+### Render
+
+[`render.yaml`](../render.yaml) là blueprint dựng sẵn service và database.
+Trên Render chọn *New → Blueprint*, trỏ vào repository này.
+
+Render tự sinh `RENDERCV_WEB_SECRET` và tự nối chuỗi kết nối Postgres. Ba
+biến Google được đánh dấu `sync: false` nên Render sẽ hỏi lúc deploy, thay vì
+nằm trong file công khai.
+
+Sau lần deploy đầu, Render cấp hostname — lúc đó mới điền được
+`GOOGLE_OAUTH_REDIRECT_URI` và khai đúng URI đó trong Google Cloud Console:
+
+```
+https://<ten-service>.onrender.com/api/auth/google/callback
+```
+
+> Gói free của Render **ngủ sau 15 phút không có request**, và lần đánh thức
+> đầu mất vài chục giây. Với đồ án demo thì chấp nhận được, nhưng đừng ngạc
+> nhiên khi lần mở đầu tiên chậm.
+
+### Xem trước phía client (WASM) không có trong image
+
+Image cố ý **không chạy** `npm run build:wasm-assets`. Nó gom khoảng 30MB
+Pyodide, font và một wasm binary của Typst cho bộ render phía client — thứ
+mặc định đang tắt — và bản thân script cần `uv build`, tức phải nhét cả
+toolchain Python vào tầng Node để tạo ra thứ không ai bật.
+
+Hệ quả: bật cờ WASM trên một deployment build theo cách này sẽ ra một bộ
+render không có asset để tải. Muốn dùng thì phải thêm bước build đó vào
+Dockerfile.
+
 ### Biến môi trường
 
 | Biến | Bắt buộc | Ghi chú |
@@ -307,8 +367,10 @@ Hai dòng cuối đáng chú ý:
 | `RENDERCV_WEB_SECRET` | **Có** | Chuỗi ngẫu nhiên đủ dài, giữ ngoài mã nguồn. Xem cảnh báo bên dưới. |
 | `RENDERCV_WEB_HTTPS` | **Có** (khi chạy HTTPS) | Đặt `1` để cookie phiên được đánh dấu `Secure`. Không đặt thì cookie đi qua mạng ở dạng đọc được. |
 | `RENDERCV_WEB_DATABASE_URL` | Nên có | Chuỗi kết nối Postgres. Không đặt thì rơi về SQLite theo file, sẽ mất dữ liệu mỗi lần container khởi động lại. |
-| `RENDERCV_WEB_ALLOWED_ORIGINS` | Chỉ khi khác origin | Danh sách origin của frontend, ngăn cách bằng dấu phẩy. Bỏ qua nếu frontend và API cùng một origin. |
-| `GOOGLE_OAUTH_*` | Không | Xem mục trên. |
+| `RENDERCV_WEB_FRONTEND_DIR` | Có (khi deploy) | Thư mục chứa bản build frontend để backend phục vụ. Image tự đặt sẵn. Bỏ trống thì backend chỉ phục vụ API và mọi trang trả 404 — đúng cho môi trường dev, nơi Vite lo phần frontend. |
+| `RENDERCV_WEB_ALLOWED_ORIGINS` | Hầu như không | Chỉ dùng khi frontend khác origin với API — cấu hình **không chạy được**, xem mục [Một origin duy nhất](#một-origin-duy-nhất-không-phải-hai). |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | **Có** | Thiếu thì không ai vào được editor. |
+| `GOOGLE_OAUTH_REDIRECT_URI` | **Có** (khi deploy) | `https://<domain>/api/auth/google/callback`, khớp từng ký tự với khai báo trong Google Cloud Console. |
 
 > **`RENDERCV_WEB_SECRET` là thứ dễ quên nhất và hậu quả nặng nhất.** Giá
 > trị dự phòng là một chuỗi hardcode nằm trong repository công khai -- ai
@@ -339,38 +401,19 @@ lúc khởi động.
 
 ### CORS
 
-Nếu frontend và API phục vụ **cùng một origin** (reverse proxy đưa `/api`
-về backend), bỏ qua mục này.
+Deploy theo cách mô tả ở [Một origin duy
+nhất](#một-origin-duy-nhất-không-phải-hai) thì **bỏ qua mục này** — không có
+request cross-origin nào để cho phép, và `RENDERCV_WEB_ALLOWED_ORIGINS` để
+trống.
 
-Nếu **khác origin**, khai báo origin của frontend:
+`RENDERCV_WEB_ALLOWED_ORIGINS` chỉ có nghĩa khi frontend nằm khác origin với
+API. Nhưng cấu hình đó **không chạy được** với cookie hiện tại, vì lý do đã
+nêu ở mục trên: CORS cho request đi qua, `SameSite=Lax` vẫn giữ cookie lại.
+Khai biến này rồi tưởng xong là kiểu sai mất nhiều thời gian nhất, vì không
+có thông báo lỗi nào chỉ ra nguyên nhân.
 
-```
-RENDERCV_WEB_ALLOWED_ORIGINS=https://cv.example.com
-```
-
-Cookie phiên gửi kèm `credentials`, nên trình duyệt sẽ **từ chối** mọi
-request nếu origin không khớp chính xác. Triệu chứng rất dễ gây hiểu lầm:
-trang tải bình thường nhưng không đăng nhập được và không lưu được gì, dấu
-vết duy nhất là lỗi CORS trong console.
-
-> **Nhưng khai CORS thôi thì chưa đủ, và mục này từng gợi ý là đủ.** Cookie
-> phiên đặt `SameSite=Lax` (`auth.py`, `oauth.py`), nên trình duyệt **không
-> gửi cookie** trong request `fetch` sang site khác. CORS cho request đi
-> qua, `SameSite` vẫn giữ cookie lại: đăng nhập xong là mất phiên ngay, và
-> console không báo lỗi CORS nào để lần ra.
->
-> Lưu ý `vercel.app` nằm trong Public Suffix List, nên `a.vercel.app` và
-> `b.vercel.app` là **hai site khác nhau** -- để cả hai trên Vercel cũng
-> không thoát được.
->
-> Vì vậy **một origin duy nhất là cấu hình deploy nên chọn**: một host phục
-> vụ frontend đã build và mở API ở `/api` cùng domain. Muốn thật sự tách
-> origin thì phải đổi cookie sang `SameSite=None; Secure` -- một thay đổi
-> bảo mật cần cân nhắc, chưa làm.
->
-> Proxy `/api` trong `vite.config.ts` chỉ chạy ở **dev server**; bản build
-> production không có nó. Chưa có Dockerfile hay cấu hình adapter cho
-> deployment một-origin -- đó là việc còn phải làm.
+Muốn thật sự tách origin thì phải đổi cookie sang `SameSite=None; Secure` —
+một thay đổi bảo mật cần cân nhắc riêng, chưa làm.
 
 ## Đọc tiếp ở đâu
 

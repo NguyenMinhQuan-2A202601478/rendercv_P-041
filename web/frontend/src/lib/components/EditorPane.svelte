@@ -8,7 +8,7 @@
 	import { derivePdfFilename } from '$lib/editor/filename';
 	import { documents } from '$lib/stores/documents';
 	import { theme } from '$lib/stores/theme';
-	import { fetchThemes } from '$lib/api/themes';
+	import { fetchThemes, type ThemeInfo } from '$lib/api/themes';
 	import { createFormSync } from '$lib/form/formSync';
 	import { buildDiscriminatorSwitchOp } from '$lib/form/documentActions';
 	import YamlEditor from '$lib/components/YamlEditor.svelte';
@@ -55,13 +55,16 @@
 	const designSync = createFormSync(documents, { documentKey: 'design' });
 	const designSyncState = designSync.state;
 
-	let themeNames = $state<string[]>(['classic']);
+	// The full list, not just the names: switching a theme rewrites the
+	// design document from that theme's defaults, which arrive here.
+	let themes = $state<ThemeInfo[]>([]);
+	let themeNames = $derived(themes.length ? themes.map((t) => t.name) : ['classic']);
 
 	onMount(() => {
 		void designSync.activate();
 		fetchThemes()
-			.then((themes) => {
-				themeNames = themes.map((t) => t.name);
+			.then((loaded) => {
+				themes = loaded;
 			})
 			.catch(() => {
 				// The switcher just keeps its single-item fallback list; the
@@ -79,8 +82,34 @@
 			'classic'
 	);
 
+	/**
+	 * Switches theme by rewriting the whole design document.
+	 *
+	 * Why not by patching the `theme:` line, which is what this did: the
+	 * starter design document now spells out every option at the starting
+	 * theme's values (see `rendercv_web/defaults.py`). Those explicit values
+	 * win over whatever theme is named, so changing only the name produced a
+	 * byte-identical PDF -- the switcher looked like it worked and changed
+	 * nothing. Replacing the block puts the new theme's own values in.
+	 *
+	 * The cost, accepted deliberately: design edits the user has made are
+	 * replaced along with everything else. Keeping them would mean deciding
+	 * which values were chosen and which were merely inherited, and the
+	 * document does not record that difference.
+	 *
+	 * Falls back to the old single-key patch when the theme list has not
+	 * loaded -- an offline switcher that renames the theme is still better
+	 * than one that does nothing.
+	 */
 	function switchTheme(theme: string): void {
-		designSync.submitOp(buildDiscriminatorSwitchOp(get(documents).design, 'design', 'theme', theme));
+		const defaults = themes.find((candidate) => candidate.name === theme)?.design_defaults;
+		if (!defaults) {
+			designSync.submitOp(
+				buildDiscriminatorSwitchOp(get(documents).design, 'design', 'theme', theme)
+			);
+			return;
+		}
+		designSync.submitOp({ op: 'set', path: ['design'], value: defaults });
 	}
 
 	// Whenever the error set changes, refresh gutter markers in all four

@@ -43,6 +43,16 @@ export const TEST_SECRET = 'e2e-only-secret';
 export const DATABASE_URL = `sqlite:///${join(tmpdir(), 'rendercv-e2e.db')}`;
 
 /**
+ * Where the suite records how many pool accounts it has handed out.
+ *
+ * On disk rather than in memory because Playwright restarts its worker
+ * after a failure, which would reset an in-process counter and start
+ * reissuing accounts earlier tests had already dirtied. `globalSetup`
+ * truncates it at the start of every run.
+ */
+export const ACCOUNT_CURSOR_PATH = join(tmpdir(), 'rendercv-e2e-accounts-used');
+
+/**
  * How many accounts `globalSetup` creates up front.
  *
  * Comfortably above the number of tests: they cost a row each, and running

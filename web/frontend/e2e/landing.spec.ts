@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { gotoReady } from './helpers';
 
 /**
  * Phase 5c: the static landing page, served at `/` since Phase 6
@@ -119,6 +120,35 @@ test.describe('Landing page (/)', () => {
 
 		await question.click();
 		await expect(details).not.toHaveAttribute('open', '');
+	});
+
+	test('the landing page and the editor draw the same brand mark', async ({ page }) => {
+		// They did not. The nav showed a document and the editor's sidebar
+		// showed a bird, because each drew its own inline SVG and the two
+		// drifted apart -- silently, since nothing compares them. Both now
+		// render `BrandMark`, and this compares the shape they actually
+		// produce rather than trusting that they still share a component.
+		await page.goto('/');
+		const landingMark = await page
+			.locator('[data-brand-mark]')
+			.first()
+			.innerHTML();
+
+		await gotoReady(page);
+		const editorMark = await page.locator('[data-brand-mark]').first().innerHTML();
+
+		expect(editorMark).toBe(landingMark);
+	});
+
+	test('the favicon belongs to this project, not to the framework scaffold', async ({ page }) => {
+		// It shipped as SvelteKit's own orange logo, straight from the
+		// starter template, and reached production that way -- every visitor
+		// saw Svelte's mark on the browser tab.
+		const response = await page.request.get('/src/lib/assets/favicon.svg');
+		const svg = await response.text();
+
+		expect(svg).not.toContain('svelte-logo');
+		expect(svg).toContain('RenderCV');
 	});
 
 	test('footer CTA links to the editor and credits upstream RenderCV', async ({ page }) => {

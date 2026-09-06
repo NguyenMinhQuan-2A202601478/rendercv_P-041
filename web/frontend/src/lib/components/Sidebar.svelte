@@ -6,6 +6,7 @@
 	import { formatRelativeTime } from '$lib/app/relativeTime';
 	import { listVersions, type CvVersionSummary } from '$lib/api/cvs';
 	import type { AuthStatus } from '$lib/api/auth';
+	import BrandMark from '$lib/components/BrandMark.svelte';
 	import AccountMenu from '$lib/components/AccountMenu.svelte';
 
 	let {
@@ -128,23 +129,7 @@
 	-->
 	<div class="flex items-center p-2" class:justify-center={collapsed}>
 		<span class="flex items-center gap-2 px-1 text-neutral-800 dark:text-neutral-100">
-			<svg
-				viewBox="0 0 24 24"
-				width="20"
-				height="20"
-				fill="none"
-				aria-hidden="true"
-				class="shrink-0 text-purple-500 dark:text-purple-400"
-			>
-				<path
-					d="M3 13c2-5 6-8 9-8 1 0 1.5.7 1 1.5-.6 1-.2 1.8.8 1.5 2-.6 4 .6 4 2.3 0 1.6-1.7 2.2-3 1.7-1.5-.5-2 .4-1 1.5.9 1 .5 2-.8 2-3 0-6.5-1-8-4"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				/>
-				<circle cx="16.5" cy="7.5" r="0.9" fill="currentColor" />
-			</svg>
+			<span class="text-purple-500 dark:text-purple-400"><BrandMark size={20} /></span>
 			{#if !collapsed}
 				<span class="text-sm font-semibold tracking-tight">RenderCV</span>
 			{/if}

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
@@ -11,6 +12,22 @@ import { gotoReady, firstPreviewUrl } from './helpers';
  * and avoids re-waiting for the ~800ms debounce + first render from scratch
  * for every assertion.
  */
+
+/**
+ * Puts the cursor at the end of the editor line containing `text`.
+ *
+ * Why the tests reach for an existing line rather than inserting one: the
+ * starter CV is the core's sample and already declares `phone:`, so typing
+ * a second one made a duplicate key -- a YAML syntax error, not the schema
+ * error these tests are about. One of them failed outright; the other kept
+ * passing, because a syntax error raises a lint marker too, and quietly
+ * stopped testing what its name says.
+ */
+async function cursorAtEndOfLine(page: Page, text: string): Promise<void> {
+	const line = page.locator('.cm-line', { hasText: text }).first();
+	await line.click();
+	await page.keyboard.press('End');
+}
 
 test.describe('CV editor: edit -> preview loop', () => {
 	test('valid edit re-renders the preview with a new blob URL', async ({ page }) => {
@@ -43,23 +60,20 @@ test.describe('CV editor: edit -> preview loop', () => {
 		await gotoReady(page);
 		const goodUrl = await firstPreviewUrl(page);
 
-		const editor = page.locator('.cm-content');
-		await editor.click();
-		await page.keyboard.press('Control+Home');
-		await page.keyboard.press('ArrowDown'); // "  name: John Doe"
-		await page.keyboard.press('End');
-		await page.keyboard.press('Enter'); // keeps the 2-space indent of the name line
-		await page.keyboard.type('phone: abc');
+		// The sample ships `phone:` with no value; filling it with something
+		// unparsable is a schema error and nothing else.
+		await cursorAtEndOfLine(page, 'phone:');
+		await page.keyboard.type(' abc');
 
 		// The CV tab gets a red error dot.
 		const cvTab = page.getByRole('tab', { name: /^CV/ });
 		await expect(cvTab.locator('span[aria-label*="error"]')).toBeVisible({ timeout: 25_000 });
 
-		// A gutter marker appears in the lint gutter, on the "phone: abc" line.
+		// A gutter marker appears in the lint gutter, on the phone line.
 		const marker = page.locator('.cm-lint-marker-error');
 		await expect(marker).toBeVisible({ timeout: 25_000 });
 
-		// The line the marker sits on is the one we just typed.
+		// The line the marker sits on is the one just edited.
 		const phoneLineNumber = await page.evaluate(() => {
 			const lines = Array.from(document.querySelectorAll('.cm-line'));
 			return lines.findIndex((el) => el.textContent?.includes('phone: abc')) + 1;
@@ -78,21 +92,16 @@ test.describe('CV editor: edit -> preview loop', () => {
 		await gotoReady(page);
 		await firstPreviewUrl(page);
 
-		const editor = page.locator('.cm-content');
-		await editor.click();
-		await page.keyboard.press('Control+Home');
-		await page.keyboard.press('ArrowDown');
-		await page.keyboard.press('End');
-		await page.keyboard.press('Enter');
-		await page.keyboard.type('phone: abc');
+		await cursorAtEndOfLine(page, 'phone:');
+		await page.keyboard.type(' abc');
 
 		await expect(page.locator('.cm-lint-marker-error')).toBeVisible({ timeout: 25_000 });
 
-		// Fix it: select the whole "phone: abc" line and delete it.
-		await page.keyboard.press('Home');
-		await page.keyboard.press('Shift+End');
-		await page.keyboard.press('Delete');
-		await page.keyboard.press('Backspace'); // remove the now-empty line
+		// Fix it: take the four characters back off, leaving `phone:` empty
+		// again, which is how the sample ships it.
+		for (let i = 0; i < 4; i += 1) {
+			await page.keyboard.press('Backspace');
+		}
 
 		await expect(page.locator('.cm-lint-marker-error')).toHaveCount(0, { timeout: 25_000 });
 		const cvTab = page.getByRole('tab', { name: /^CV/ });

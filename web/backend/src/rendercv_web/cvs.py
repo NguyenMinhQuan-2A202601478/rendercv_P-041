@@ -23,10 +23,10 @@ from .db.models import Cv
 from .db.session import get_session
 from .defaults import (
     DEFAULT_CV_NAME,
-    DEFAULT_CV_YAML,
-    DEFAULT_DESIGN_YAML,
-    DEFAULT_LOCALE_YAML,
-    DEFAULT_SETTINGS_YAML,
+    default_cv_yaml,
+    default_design_yaml,
+    default_locale_yaml,
+    default_settings_yaml,
 )
 from .errors import CvConflictError
 from .limits import enforce_documents_size_cap
@@ -201,10 +201,10 @@ def create_cv(
         session,
         current_user.id,
         name=request.name or DEFAULT_CV_NAME,
-        cv_yaml=DEFAULT_CV_YAML,
-        design_yaml=DEFAULT_DESIGN_YAML,
-        locale_yaml=DEFAULT_LOCALE_YAML,
-        settings_yaml=DEFAULT_SETTINGS_YAML,
+        cv_yaml=default_cv_yaml(),
+        design_yaml=default_design_yaml(),
+        locale_yaml=default_locale_yaml(),
+        settings_yaml=default_settings_yaml(),
     )
     return cv_to_detail(cv)
 

@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 from .auth import (
     SESSION_COOKIE_MAX_AGE_SECONDS,
     SESSION_COOKIE_NAME,
+    CurrentAccount,
     CurrentUser,
     cookie_is_https_only,
     decode_cookie,
@@ -448,3 +449,33 @@ def sign_out(
     user = repository.get_user_by_token(session, token) if token else None
     if user is not None and user.auth_provider is not None:
         repository.rotate_session_token(session, user, generate_session_token())
+
+
+@router.delete("/me", status_code=204)
+def delete_account(
+    response: Response, session: SessionDep, account: CurrentAccount
+) -> None:
+    """Erase the signed-in account and everything it owns.
+
+    Why it takes no confirmation parameter: the request itself is the
+    confirmation. Asking the caller to repeat something back would only
+    move the decision, and the interface already puts a dialog in front of
+    it -- a second gate in the API would protect nobody while making the
+    endpoint harder to call correctly.
+
+    Why `CurrentAccount` rather than resolving the cookie by hand: this must
+    refuse anonymous callers outright. `CurrentAccount` does that, and it
+    also means a request with no valid session cannot reach the delete at
+    all rather than deleting whatever row it happened to mint.
+
+    The cookie is cleared as well. Leaving it would send the browser back
+    with a token whose row no longer exists, which resolves to "signed
+    out" -- correct, but by accident rather than on purpose.
+
+    Args:
+        response: The response to clear the session cookie on.
+        session: The database session.
+        account: The signed-in account, required.
+    """
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    repository.delete_user(session, account)

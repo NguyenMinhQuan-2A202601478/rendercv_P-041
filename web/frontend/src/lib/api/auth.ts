@@ -59,6 +59,19 @@ export async function signOut(fetchImpl: typeof fetch = apiFetch): Promise<boole
 	return response.status === 204;
 }
 
+/**
+ * `DELETE /api/auth/me` -- erases the account and everything it owns.
+ *
+ * Why this returns a boolean rather than throwing: the caller has already
+ * shown the user a confirmation and needs to know whether to send them
+ * back to the landing page or leave them where they are with the account
+ * intact. A thrown error would say the same thing less directly.
+ */
+export async function deleteAccount(fetchImpl: typeof fetch = apiFetch): Promise<boolean> {
+	const response = await fetchImpl('/api/auth/me', { method: 'DELETE' });
+	return response.status === 204;
+}
+
 function signedOutStatus(): AuthStatus {
 	return { authenticated: false, email: null, displayName: null, providerAvailable: false };
 }

@@ -5,7 +5,8 @@
 	import type { PreviewState } from '$lib/preview/renderController';
 	import type { ValidationError } from '$lib/api/validate';
 	import { groupErrorsByDocument } from '$lib/editor/errorClassification';
-	import { derivePdfFilename } from '$lib/editor/filename';
+	import { derivePdfFilename, deriveYamlFilename } from '$lib/editor/filename';
+	import { buildRendercvYaml } from '$lib/editor/exportYaml';
 	import { documents } from '$lib/stores/documents';
 	import { theme } from '$lib/stores/theme';
 	import { fetchThemes, type ThemeInfo } from '$lib/api/themes';
@@ -153,6 +154,22 @@
 
 	function downloadFromMenu(): void {
 		download($previewState.url);
+		closeDownloadMenu();
+	}
+
+	function downloadYamlFromMenu(): void {
+		// Built from the editor's live documents rather than refetched: what
+		// the user sees is what they get, including edits the autosave has
+		// not written yet.
+		const blob = new Blob([buildRendercvYaml($documents)], { type: 'application/yaml' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = deriveYamlFilename($documents);
+		link.click();
+		// The blob would otherwise be held for the life of the document; the
+		// click has already read it by the time this runs.
+		URL.revokeObjectURL(url);
 		closeDownloadMenu();
 	}
 
@@ -352,9 +369,6 @@
 						class="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-neutral-200 bg-white py-1 text-sm shadow-lg dark:border-[var(--border-subtle)] dark:bg-[var(--surface-card)]"
 					>
 						<li role="none">
-							<!-- Only "Download PDF" exists today -- the caret is a seam
-							for future formats (e.g. Markdown/HTML export), not a fake
-							feature; this single item is real and functional. -->
 							<button
 								role="menuitem"
 								type="button"
@@ -362,6 +376,19 @@
 								onclick={downloadFromMenu}
 							>
 								Download PDF
+							</button>
+						</li>
+						<li role="none">
+							<!-- The PDF is the output; this is the source. Only the YAML
+							can be edited again, here or by RenderCV's own CLI, which
+							makes it the one worth keeping a copy of. -->
+							<button
+								role="menuitem"
+								type="button"
+								class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+								onclick={downloadYamlFromMenu}
+							>
+								Download YAML
 							</button>
 						</li>
 					</ul>

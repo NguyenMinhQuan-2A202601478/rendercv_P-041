@@ -174,6 +174,57 @@ installed driver, because SQLAlchemy has no `postgres` dialect and defaults
 The application also migrates on startup, so no manual step is needed
 afterwards.
 
+### Rotating the database password on Render
+
+Done once, on 2026-09-07, after the password leaked. It took the deployment
+down for about ten minutes, entirely because of the two surprises below.
+
+The order that works:
+
+1. Database → **Info** → **Credential Rotation** → `+ New default credential`.
+2. Copy the new **Internal Database URL** (the service runs inside Render's
+   network; External is for `psql` from a laptop).
+3. Service → **Environment** → edit `RENDERCV_WEB_DATABASE_URL` → **Save**.
+   Saving triggers its own deploy.
+4. Sign in to the app and open a CV.
+5. Only then delete the old credential.
+
+**Surprise one: creating the new default revokes the old one immediately.**
+Render's wording -- "Create new default credentials and delete the old ones
+when ready" -- reads as though the old pair keeps working until deleted. It
+does not. From the moment the new default exists, the old role answers
+`FATAL: role "..." is not permitted to log in`, and because the application
+migrates on startup it does not degrade, it exits: `Application startup
+failed. Exiting.`, and every URL stops answering. Steps 1 and 3 therefore
+belong back to back.
+
+**Surprise two: `Manual Deploy` does not fix it.** `render.yaml` declares
+
+```yaml
+- key: RENDERCV_WEB_DATABASE_URL
+  fromDatabase:
+    name: rendercv-web-db
+    property: connectionString
+```
+
+but Render resolves that once and stores the result as an ordinary variable
+on the service. A redeploy rebuilds the image with the variables that are
+already there; it does not re-resolve `fromDatabase`. So a deploy after a
+rotation fails with the *old* username -- which is confusing to read, because
+that username no longer appears anywhere in the Credential Rotation table.
+Step 3 is what actually repairs the service.
+
+Two things worth knowing while diagnosing this:
+
+- A running deployment is proof the database connection works. Startup runs
+  `upgrade_to_head`, so the service cannot serve a single byte without it.
+  The reverse does not hold: `/api/themes`, `/privacy` and `/api/auth/me`
+  (with no cookie) all answer without touching the database, so a `200` from
+  them says nothing while the service is starting.
+- Read the deploy id in the log header before believing a failure is the
+  current one. A stale failed deploy and a live healthy one sit next to each
+  other in the dashboard.
+
 ### Isolation
 
 The e2e suite must never run against a database anyone cares about — see

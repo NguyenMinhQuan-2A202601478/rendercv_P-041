@@ -415,6 +415,26 @@ có thông báo lỗi nào chỉ ra nguyên nhân.
 Muốn thật sự tách origin thì phải đổi cookie sang `SameSite=None; Secure` —
 một thay đổi bảo mật cần cân nhắc riêng, chưa làm.
 
+### Tệp xác minh của Google — đừng xoá
+
+`web/frontend/static/googlecdc32a5d8f95119a.html` không phải rác. Google
+Search Console tải nó về ở gốc website để xác nhận tên miền này là của
+mình, và trang đồng ý OAuth chỉ được phép mang địa chỉ trang chủ cùng
+privacy policy sau khi việc xác nhận đó thành công.
+
+Đây là loại tệp rất dễ bị dọn nhầm: **không có dòng code nào trong ứng dụng
+đọc nó**, nên xoá đi thì mọi thứ ở đây vẫn chạy y nguyên. Hậu quả rơi ở chỗ
+khác — Search Console lặng lẽ huỷ xác minh, và Google có thể gỡ branding
+khỏi màn hình đăng nhập, không có thông báo nào trong repo giải thích tại
+sao.
+
+Vì vậy nó được một e2e test canh (`web/frontend/e2e/landing.spec.ts`, mục
+"Google site verification"): test gọi đúng địa chỉ Google gọi và đối chiếu
+nội dung với chính tên tệp. Xoá tệp là test đỏ.
+
+Nội dung phải giữ **nguyên từng byte** như Google phát ra. Đừng thêm chú
+thích vào bên trong tệp — lời giải thích thuộc về chỗ này.
+
 ## Đọc tiếp ở đâu
 
 - `docs/plans/completed/cv-editor-web-app.md` -- kế hoạch thực thi, kèm bằng

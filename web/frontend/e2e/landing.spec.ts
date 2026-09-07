@@ -254,6 +254,33 @@ test.describe('Privacy policy (/privacy)', () => {
 	});
 });
 
+test.describe('Google site verification', () => {
+	// Google refused to publish the OAuth app's branding until the home page
+	// URL was proved to belong to us, and this file is that proof: Search
+	// Console fetches it at the root and matches its contents against its
+	// own name.
+	//
+	// Why it is worth a test rather than a comment: nothing in the app reads
+	// this file, so deleting it breaks nothing here and shows no symptom at
+	// all. The failure lands somewhere else entirely -- Search Console
+	// quietly drops the verification, and Google can then pull the branding
+	// off the consent screen. This test is the only thing standing between a
+	// tidy-up and that.
+	const VERIFICATION_FILE = 'googlecdc32a5d8f95119a.html';
+
+	test('the verification file is served at the address Google fetches', async ({ page }) => {
+		const response = await page.request.get(`/${VERIFICATION_FILE}`);
+
+		expect(response.status()).toBe(200);
+		// Asserted against the filename rather than a copied literal: that is
+		// exactly the relationship Google checks, so a file renamed without
+		// its contents being updated fails here too.
+		expect((await response.text()).trim()).toBe(
+			`google-site-verification: ${VERIFICATION_FILE}`
+		);
+	});
+});
+
 // Note: the Sidebar "About" link (added to `Sidebar.svelte`'s footer area)
 // is intentionally NOT covered here. `Sidebar` only mounts after the editor's
 // `/api` bootstrap completes, and this spec is deliberately backend-free (see

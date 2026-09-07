@@ -15,6 +15,7 @@ from rendercv_web.frontend import FRONTEND_DIR_ENV_VAR, mount_frontend
 
 LANDING_HTML = "<html><body><h1>YAML-first resume builder</h1></body></html>"
 FALLBACK_HTML = "<html><body><div id='spa'></div></body></html>"
+PRIVACY_HTML = "<html><body><h1>Privacy Policy</h1></body></html>"
 
 
 def build_frontend(directory: pathlib.Path, with_fallback: bool = True) -> None:
@@ -31,6 +32,9 @@ def build_frontend(directory: pathlib.Path, with_fallback: bool = True) -> None:
     if with_fallback:
         (directory / "fallback.html").write_text(FALLBACK_HTML, encoding="utf-8")
     (directory / "robots.txt").write_text("User-agent: *\n", encoding="utf-8")
+    # `adapter-static` names a prerendered `/privacy` this way -- as a
+    # sibling file, not as `privacy/index.html`.
+    (directory / "privacy.html").write_text(PRIVACY_HTML, encoding="utf-8")
     immutable = directory / "_app" / "immutable"
     immutable.mkdir(parents=True, exist_ok=True)
     (immutable / "entry.abc123.js").write_text("export default 1;\n", encoding="utf-8")
@@ -122,6 +126,28 @@ class TestServingTheBuild:
         response = client.get("/app")
 
         assert response.status_code == 200
+        assert "id='spa'" in response.text
+
+    def test_a_prerendered_route_serves_its_own_html(self, client: TestClient) -> None:
+        # `/privacy` names no file in the build -- the build calls it
+        # `privacy.html` -- so without the suffix lookup this answers with
+        # the SPA shell. A browser would still render the policy, which is
+        # what would hide the fault: the readers who get the empty shell
+        # are the ones who do not run JavaScript, and Google's OAuth
+        # reviewer is one of them.
+        response = client.get("/privacy")
+
+        assert response.status_code == 200
+        assert "Privacy Policy" in response.text
+        assert "id='spa'" not in response.text
+
+    def test_a_route_without_prerendered_html_still_gets_the_shell(
+        self, client: TestClient
+    ) -> None:
+        # The suffix lookup must not change what happens to the routes that
+        # are deliberately not prerendered. `/app` is the whole editor.
+        response = client.get("/app")
+
         assert "id='spa'" in response.text
 
     def test_a_real_file_is_served_from_the_build(self, client: TestClient) -> None:
@@ -228,6 +254,10 @@ class TestWhatTheCatchAllMustNotSwallow:
         # lands, so an escape returns its contents rather than 404ing for
         # absence and passing the test for the wrong reason.
         (tmp_path / "secrets.txt").write_text("do not serve me", encoding="utf-8")
+        # And again under the name the prerendered-route lookup would try,
+        # which is a second way out of the build directory and needs its
+        # own guard.
+        (tmp_path / "secrets.txt.html").write_text("do not serve me", encoding="utf-8")
 
         response = client.get(f"/{path}")
 

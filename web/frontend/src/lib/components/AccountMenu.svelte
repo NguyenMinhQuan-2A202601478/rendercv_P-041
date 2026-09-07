@@ -15,8 +15,18 @@
 
 	let {
 		status,
-		onSignOut
-	}: { status: Readable<AuthStatus>; onSignOut: () => void } = $props();
+		onSignOut,
+		onDeleteAccount
+	}: {
+		status: Readable<AuthStatus>;
+		onSignOut: () => void;
+		onDeleteAccount: () => void;
+	} = $props();
+
+	// Deleting an account cannot be undone, and the control sits beside
+	// "Sign out" -- two words apart from something people click without
+	// reading. So it is two steps, and the second one spells out what goes.
+	let confirming = $state(false);
 
 	// Prefer the name, fall back to the email, and never render an empty
 	// strip: Google always supplies at least one of them, but a provider
@@ -55,6 +65,15 @@
 			>
 				Sign out
 			</button>
+			<button
+				type="button"
+				onclick={() => (confirming = true)}
+				aria-label="Delete account"
+				title="Delete account"
+				class="rounded-md px-2 py-1.5 text-xs font-medium text-neutral-400 hover:bg-red-50 hover:text-red-700 dark:text-neutral-500 dark:hover:bg-red-950 dark:hover:text-red-300"
+			>
+				Delete
+			</button>
 		{:else}
 			<!-- A link, not a button: the OAuth flow is a full-page redirect to
 			     Google, so the browser must navigate rather than fetch. -->
@@ -82,4 +101,36 @@
 			</a>
 		{/if}
 	</div>
+
+	{#if confirming}
+		<div
+			role="alertdialog"
+			aria-label="Delete account?"
+			class="border-t border-red-200 bg-red-50 p-3 text-xs dark:border-red-900 dark:bg-red-950"
+		>
+			<p class="mb-2 text-red-900 dark:text-red-200">
+				Delete your account? Every CV, its version history and your preferences go with
+				it. This cannot be undone.
+			</p>
+			<div class="flex justify-end gap-2">
+				<button
+					type="button"
+					class="rounded-md border border-neutral-300 px-2.5 py-1 text-neutral-700 dark:border-[var(--border-subtle)] dark:text-neutral-200"
+					onclick={() => (confirming = false)}
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					class="rounded-md bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-700"
+					onclick={() => {
+						confirming = false;
+						onDeleteAccount();
+					}}
+				>
+					Delete account
+				</button>
+			</div>
+		</div>
+	{/if}
 {/if}

@@ -669,6 +669,29 @@ def create_account_user(
     return user
 
 
+def delete_user(session: Session, user: User) -> None:
+    """Erase an account and everything that belongs to it.
+
+    Why:
+        A published app has to let people take their data back out of it,
+        and a privacy policy that promises deletion has to be backed by
+        something that deletes.
+
+    Why one `delete` is enough: every table that references a user does so
+    with `ON DELETE CASCADE` (`db.models`), and SQLite has foreign keys
+    enabled for the same reason (`db.session`), so the CVs, their version
+    history and the preferences go with the row. Deleting them by hand
+    here would be a second description of the schema, free to fall out of
+    step with the first.
+
+    Args:
+        session: The database session.
+        user: The account to erase.
+    """
+    session.delete(user)
+    session.commit()
+
+
 def rotate_session_token(session: Session, user: User, new_session_token: str) -> User:
     """Replace a row's session token, invalidating every cookie carrying the old one.
 

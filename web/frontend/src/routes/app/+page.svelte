@@ -146,6 +146,18 @@
 		window.location.reload();
 	}
 
+	async function handleDeleteAccount(): Promise<void> {
+		// Flush first, for the same reason signing out does: an autosave
+		// still on the wire would otherwise arrive after the account is
+		// gone and fail against a row that no longer exists.
+		await autosave.flush();
+		const deleted = await auth.deleteAccount();
+		// Back to the landing page on success -- there is no account left
+		// to show the editor to. On failure the editor stays as it was,
+		// still signed in, which is the truth.
+		if (deleted) window.location.href = '/';
+	}
+
 	onMount(() => {
 		void (async () => {
 			// Awaited before bootstrap, not alongside it: `/api/cvs` and
@@ -260,6 +272,7 @@
 			onRestore={handleRestore}
 			{authStatus}
 			onSignOut={handleSignOut}
+			onDeleteAccount={handleDeleteAccount}
 		/>
 		<main class="flex flex-1 overflow-hidden">
 			<div class="min-w-0 shrink-0" style={`flex-basis: ${$splitRatio}%`}>

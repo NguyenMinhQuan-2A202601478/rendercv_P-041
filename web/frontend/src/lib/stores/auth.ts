@@ -1,5 +1,10 @@
 import { writable, type Readable } from 'svelte/store';
-import { getAuthStatus, signOut as signOutApi, type AuthStatus } from '$lib/api/auth';
+import {
+	deleteAccount as deleteAccountApi,
+	getAuthStatus,
+	signOut as signOutApi,
+	type AuthStatus
+} from '$lib/api/auth';
 
 /**
  * Who the current session belongs to, and whether this deployment offers
@@ -26,15 +31,22 @@ export interface AuthController {
 	refresh: () => Promise<void>;
 	/** Signs this browser out, then refreshes so the UI follows. */
 	signOut: () => Promise<void>;
+	/** Erases the account and everything it owns. Resolves to whether it worked. */
+	deleteAccount: () => Promise<boolean>;
 }
 
 export function createAuthController(
 	deps: {
 		fetchStatus?: typeof getAuthStatus;
 		requestSignOut?: typeof signOutApi;
+		requestDeleteAccount?: typeof deleteAccountApi;
 	} = {}
 ): AuthController {
-	const { fetchStatus = getAuthStatus, requestSignOut = signOutApi } = deps;
+	const {
+		fetchStatus = getAuthStatus,
+		requestSignOut = signOutApi,
+		requestDeleteAccount = deleteAccountApi
+	} = deps;
 	const status = writable<AuthStatus>(UNKNOWN_STATUS);
 
 	async function refresh(): Promise<void> {
@@ -48,7 +60,17 @@ export function createAuthController(
 		await refresh();
 	}
 
-	return { status: { subscribe: status.subscribe }, refresh, signOut };
+	async function deleteAccount(): Promise<boolean> {
+		const deleted = await requestDeleteAccount();
+		// Only refresh on success. A failed delete leaves the account
+		// intact, and re-reading the status would report it as still
+		// signed in -- true, but easily read as the delete having worked
+		// and the UI lagging.
+		if (deleted) await refresh();
+		return deleted;
+	}
+
+	return { status: { subscribe: status.subscribe }, refresh, signOut, deleteAccount };
 }
 
 /** The app-wide controller; components subscribe to `auth.status`. */

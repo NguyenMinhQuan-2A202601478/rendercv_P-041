@@ -20,7 +20,8 @@
 		onDelete,
 		onRestore,
 		authStatus,
-		onSignOut
+		onSignOut,
+		onDeleteAccount
 	}: {
 		cvs: Readable<CvSummary[]>;
 		activeCv: Readable<ActiveCvMeta | null>;
@@ -33,6 +34,7 @@
 		onRestore: (id: number, versionId: number) => void;
 		authStatus: Readable<AuthStatus>;
 		onSignOut: () => void;
+		onDeleteAccount: () => void;
 	} = $props();
 
 	let menuOpenId = $state<number | null>(null);
@@ -331,7 +333,7 @@
 			</ul>
 		</nav>
 
-		<AccountMenu status={authStatus} {onSignOut} />
+		<AccountMenu status={authStatus} {onSignOut} {onDeleteAccount} />
 
 		<div class="flex items-center gap-1 border-t border-neutral-200 p-2 dark:border-[var(--border-subtle)]">
 			<a

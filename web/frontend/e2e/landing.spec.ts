@@ -160,6 +160,22 @@ test.describe('Landing page (/)', () => {
 		await expect(github).toHaveAttribute('target', '_blank');
 	});
 
+	test('the closing CTA does not promise what the editor no longer offers', async ({ page }) => {
+		// It said "No sign-up required" -- true when it was written, false
+		// since the editor started requiring an account, and read by the
+		// same OAuth reviewer who reads /privacy. A landing page and a
+		// privacy policy that contradict each other is the kind of thing
+		// that fails a review for a reason nobody writes down.
+		await page.goto('/');
+
+		await expect(page.getByText('No sign-up required')).toHaveCount(0);
+		// Scoped to the closing CTA: the hero also opens with 'Sign in with
+		// Google', so the bare phrase matches two paragraphs.
+		await expect(
+			page.getByText('Sign in with Google, then start from a blank CV')
+		).toBeVisible();
+	});
+
 	test('the old /welcome address permanently redirects to the landing page', async ({ page }) => {
 		// Phase 6 moved the landing page from /welcome to /. Bookmarks and
 		// links shared while it lived at /welcome must keep working rather
@@ -171,6 +187,70 @@ test.describe('Landing page (/)', () => {
 			'YAML-first resume builder'
 		);
 		expect(response?.status()).toBe(200); // followed the redirect to a real page
+	});
+});
+
+test.describe('Privacy policy (/privacy)', () => {
+	// Backend-free for the same reason the landing page is, only more so:
+	// this page reads nothing from the API at all. It is also the page a
+	// person reads when they are deciding whether to trust the service with
+	// a CV, and the page Google's OAuth review fetches, so "renders even
+	// when the server is unwell" is part of what it is for.
+
+	test('the landing page footer leads to it', async ({ page }) => {
+		await page.goto('/');
+
+		await page.getByRole('link', { name: 'Privacy' }).click();
+
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+	});
+
+	test('it renders with the API unreachable and asks it nothing', async ({ page }) => {
+		const apiRequests: string[] = [];
+		page.on('request', (request) => {
+			const { pathname } = new URL(request.url());
+			if (pathname.startsWith('/api')) apiRequests.push(pathname);
+		});
+		await page.route('**/api/**', (route) => route.abort());
+
+		await page.goto('/privacy');
+
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+		await expect(page.getByRole('heading', { name: 'What is collected' })).toBeVisible();
+		expect(apiRequests).toEqual([]);
+	});
+
+	test('it says how to delete an account and how to reach a human', async ({ page }) => {
+		// The two claims the policy exists to make. A policy promising
+		// deletion that does not say where the control is, or offering no
+		// address to someone who can no longer sign in, is a page that
+		// satisfies a reviewer and helps nobody.
+		await page.goto('/privacy');
+
+		await expect(page.getByRole('heading', { name: 'Deleting your data' })).toBeVisible();
+		await expect(page.getByText(/cannot be undone/)).toBeVisible();
+
+		const contact = page.getByRole('link', { name: /@/ });
+		await expect(contact).toHaveAttribute('href', /^mailto:/);
+	});
+
+	test('it warns that the free deployment loses data', async ({ page }) => {
+		// Deliberate, and the reason this section exists: strangers signing
+		// in have no way to know the database is disposable unless they are
+		// told before they write a CV into it.
+		await page.goto('/privacy');
+
+		await expect(page.getByText(/thirty days/)).toBeVisible();
+	});
+
+	test('it links back to the landing page', async ({ page }) => {
+		await page.goto('/privacy');
+
+		await page.getByRole('link', { name: 'Back to home' }).click();
+
+		await expect(page.getByRole('heading', { level: 1 })).toContainText(
+			'YAML-first resume builder'
+		);
 	});
 });
 

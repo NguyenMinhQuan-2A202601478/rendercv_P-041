@@ -180,6 +180,73 @@ test.describe('Auth controls', () => {
 	});
 });
 
+test.describe('Deleting an account', () => {
+	// `/api/auth/me` is intercepted only so the account strip renders: the
+	// suite's backend runs without Google credentials, so it reports
+	// `provider_available: false` and `AccountMenu` draws nothing at all.
+	// The deletion itself is real -- `DELETE /api/auth/me` is a different
+	// route and reaches the server, against the account this test owns
+	// (see `e2e/fixtures.ts`), so erasing it cannot disturb another test.
+	test.beforeEach(async ({ page }) => {
+		await page.route('**/api/auth/me', (route) => {
+			if (route.request().method() !== 'GET') return route.fallback();
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					authenticated: true,
+					email: 'person@example.com',
+					display_name: 'A Person',
+					provider_available: true
+				})
+			});
+		});
+	});
+
+	test('the control asks before doing anything', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Delete account' }).click();
+
+		const dialog = page.getByRole('alertdialog', { name: 'Delete account?' });
+		await expect(dialog).toBeVisible();
+		// The dialog has to say what goes, not just ask twice.
+		await expect(dialog).toContainText(/version history/i);
+		await expect(dialog).toContainText(/cannot be undone/i);
+	});
+
+	test('cancelling leaves the account and its CVs alone', async ({ page }) => {
+		// The failure this guards against is the worst one available here:
+		// a mis-wired cancel that deletes anyway. Nothing would report it,
+		// and the data would be gone.
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Delete account' }).click();
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
+		expect((await page.request.get('/api/cvs')).status()).toBe(200);
+
+		// Still usable after the near miss, not merely still authenticated.
+		await page.reload();
+		await expect(page.locator('[data-app-ready="true"]')).toHaveCount(1, { timeout: 15_000 });
+	});
+
+	test('confirming erases the account and returns to the landing page', async ({ page }) => {
+		await gotoReady(page);
+		expect((await page.request.get('/api/cvs')).status()).toBe(200);
+
+		await page.getByRole('button', { name: 'Delete account' }).click();
+		await page.getByRole('button', { name: 'Delete account', exact: true }).last().click();
+
+		await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+		// The session is gone, not just the page: the same cookie now buys
+		// nothing. Asserted against `/api/cvs`, which this file does not
+		// intercept, so the answer comes from the server.
+		expect((await page.request.get('/api/cvs')).status()).toBe(401);
+	});
+});
+
 test.describe('A browser with no session at all', () => {
 	// Nothing intercepted and no seeded cookie: this is the real server
 	// answering a real stranger, which is the only way to prove the gate is

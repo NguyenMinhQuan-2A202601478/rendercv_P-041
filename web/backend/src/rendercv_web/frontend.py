@@ -109,8 +109,9 @@ def mount_frontend(app: FastAPI) -> bool:
 
         Returns:
             The requested file when the build contains it, the prerendered
-            landing page for `/`, and the SPA entry point for any other
-            route the client router owns.
+            landing page for `/`, the prerendered HTML for a route that has
+            some, and the SPA entry point for any other route the client
+            router owns.
 
         Raises:
             HTTPException: 404 for an unmatched `/api/...` path. Without
@@ -135,6 +136,21 @@ def mount_frontend(app: FastAPI) -> bool:
                 else None
             )
             return FileResponse(candidate, headers=headers)
+
+        # A prerendered route. `adapter-static` writes `/privacy` to
+        # `privacy.html`, so the request path never names a file and the
+        # lookup above misses it -- the route would fall through to the SPA
+        # shell and the prerendering would buy nothing. A browser would
+        # still render the page, which is what makes this quiet: the
+        # readers who get the empty shell are the ones who do not run
+        # JavaScript, and `/privacy` exists precisely for one of them,
+        # Google's OAuth reviewer.
+        #
+        # Guarded like the lookup above: `resolve()` collapses `..`, so a
+        # path climbing out of the build is refused here too.
+        prerendered = (build / f"{resource_path}.html").resolve()
+        if prerendered.is_relative_to(build) and prerendered.is_file():
+            return FileResponse(prerendered)
 
         return FileResponse(spa_entry)
 

@@ -48,3 +48,16 @@ export function derivePdfFilename(docs: CvDocuments): string {
 
 	return sanitized.toLowerCase().endsWith('.pdf') ? sanitized : `${sanitized}.pdf`;
 }
+
+/**
+ * Derives the YAML export filename: the PDF's name with a `.yaml` extension.
+ *
+ * Why it is defined in terms of `derivePdfFilename` rather than repeating
+ * the extraction: the two files are the same CV, and a user who downloads
+ * both wants them to sort next to each other. Deriving one from the other
+ * makes that true by construction, and inherits every fallback the PDF name
+ * already has -- including `cv.pdf` becoming `cv.yaml`.
+ */
+export function deriveYamlFilename(docs: CvDocuments): string {
+	return `${derivePdfFilename(docs).replace(/\.pdf$/i, '')}.yaml`;
+}

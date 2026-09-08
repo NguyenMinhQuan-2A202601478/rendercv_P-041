@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derivePdfFilename } from './filename';
+import { derivePdfFilename, deriveYamlFilename } from './filename';
 import type { CvDocuments } from '$lib/stores/documents';
 
 function docs(overrides: Partial<CvDocuments> = {}): CvDocuments {
@@ -46,5 +46,16 @@ describe('derivePdfFilename', () => {
 				})
 			)
 		).toBe('JaneDoe - CV.pdf');
+	});
+});
+
+describe('deriveYamlFilename', () => {
+	it('matches the PDF name so both files sort together', () => {
+		expect(deriveYamlFilename(docs())).toBe('John Doe - CV.yaml');
+		expect(derivePdfFilename(docs())).toBe('John Doe - CV.pdf');
+	});
+
+	it('inherits the PDF fallback', () => {
+		expect(deriveYamlFilename(docs({ settings: '' }))).toBe('cv.yaml');
 	});
 });

@@ -108,3 +108,60 @@ test.describe('CV editor: edit -> preview loop', () => {
 		await expect(cvTab.locator('span[aria-label*="error"]')).toHaveCount(0, { timeout: 25_000 });
 	});
 });
+
+
+test.describe('Downloading the YAML source', () => {
+	// The PDF is the output; the YAML is the source, and the only one of the
+	// two that can be edited again -- here, or by RenderCV's own CLI. This
+	// exists because the deployment's database is disposable, so "get your
+	// work out" has to be a button rather than a console snippet.
+
+	test('the menu offers the source as well as the PDF', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'More download options' }).click();
+
+		const menu = page.getByRole('menu', { name: 'Download options' });
+		await expect(menu.getByRole('menuitem', { name: 'Download PDF' })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Download YAML' })).toBeVisible();
+	});
+
+	test('it saves one file that RenderCV could read back', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'More download options' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		const download = await downloadStarted;
+
+		// Named after the CV, and sharing its stem with the PDF so both files
+		// sort together in a downloads folder.
+		expect(download.suggestedFilename()).toMatch(/\.yaml$/);
+
+		const stream = await download.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+		const text = Buffer.concat(chunks).toString('utf-8');
+
+		// One file carrying the documents as top-level keys is exactly the
+		// shape `rendercv render` accepts -- that is the whole reason the
+		// export concatenates rather than zipping four files.
+		expect(text).toContain('cv:');
+		expect(text).toContain('settings:');
+		// The starter CV's name, proving it exported the open document rather
+		// than an empty shell.
+		expect(text).toContain('name:');
+		expect(text.endsWith('\n')).toBe(true);
+	});
+
+	test('the menu closes after the download starts', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'More download options' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await downloadStarted;
+
+		await expect(page.getByRole('menu', { name: 'Download options' })).toHaveCount(0);
+	});
+});

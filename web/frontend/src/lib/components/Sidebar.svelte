@@ -15,6 +15,7 @@
 		collapsed = $bindable(false),
 		onSwitch,
 		onCreate,
+		onImportFile,
 		onRename,
 		onDuplicate,
 		onDelete,
@@ -28,6 +29,7 @@
 		collapsed?: boolean;
 		onSwitch: (id: number) => void;
 		onCreate: () => void;
+		onImportFile: (file: File) => Promise<string | null>;
 		onRename: (id: number, name: string) => void;
 		onDuplicate: (id: number) => void;
 		onDelete: (id: number) => void;
@@ -36,6 +38,32 @@
 		onSignOut: () => void;
 		onDeleteAccount: () => void;
 	} = $props();
+
+	let fileInputEl: HTMLInputElement | undefined = $state();
+	// The reason the last import was refused, shown until the next attempt.
+	// Kept here rather than in a toast: the button is where the user is
+	// looking, and a file they chose by mistake deserves an answer that
+	// stays on screen while they find the right one.
+	let importError = $state<string | null>(null);
+	let importing = $state(false);
+
+	async function handleFileChosen(event: Event): Promise<void> {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		// Reset immediately so choosing the same file twice fires `change`
+		// again -- otherwise a user who fixes their file and picks it once
+		// more gets no response at all.
+		input.value = '';
+		if (!file) return;
+
+		importing = true;
+		importError = null;
+		try {
+			importError = await onImportFile(file);
+		} finally {
+			importing = false;
+		}
+	}
 
 	let menuOpenId = $state<number | null>(null);
 	let renamingId = $state<number | null>(null);
@@ -147,6 +175,37 @@
 			>
 				<span class="text-purple-500 dark:text-purple-400">+</span> Create new CV
 			</button>
+			<!--
+				Import sits beside "Create new CV" because that is what it is: a
+				second way to bring a CV into the workspace. It never touches the
+				CV that is open, so choosing the wrong file costs a spare CV in
+				the list rather than the work in front of you.
+			-->
+			<button
+				type="button"
+				disabled={importing}
+				class="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left text-sm font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-50 dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
+				onclick={() => fileInputEl?.click()}
+			>
+				<span class="text-purple-500 dark:text-purple-400">↑</span>
+				{importing ? 'Importing…' : 'Import from YAML'}
+			</button>
+			<input
+				bind:this={fileInputEl}
+				type="file"
+				accept=".yaml,.yml,text/yaml,application/yaml"
+				aria-label="YAML file to import"
+				class="sr-only"
+				onchange={handleFileChosen}
+			/>
+			{#if importError}
+				<p
+					role="alert"
+					class="mt-1 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:bg-red-950 dark:text-red-200"
+				>
+					{importError}
+				</p>
+			{/if}
 		</div>
 
 		<div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">

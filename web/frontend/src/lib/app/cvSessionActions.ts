@@ -39,6 +39,8 @@ export interface CvSessionActions {
 	switchTo: (id: number) => Promise<void>;
 	/** Flushes, creates a new default CV, adds it to the list, and opens it. */
 	createNew: () => Promise<void>;
+	/** Flushes, creates a CV from imported documents under `name`, and opens it. */
+	importFrom: (name: string, imported: CvDocuments) => Promise<void>;
 	/** Renames the CV `id`: an in-place edit if it's the open one (autosave picks it up on the normal debounce); an immediate direct write otherwise. */
 	rename: (id: number, name: string) => Promise<void>;
 	/** Duplicates a CV and adds the copy to the list (does not switch to it). */
@@ -100,6 +102,20 @@ export function createCvSessionActions(
 		const created = await createCv();
 		stores.cvs.update((list) => [toSummary(created), ...list]);
 		loadInto(created);
+	}
+
+	async function importFrom(name: string, imported: CvDocuments): Promise<void> {
+		await autosave.flush();
+		const created = await createCv();
+		stores.cvs.update((list) => [toSummary(created), ...list]);
+		loadInto(created);
+		// Set *after* `loadInto`, deliberately: that call makes the empty CV
+		// the server just created the autosave baseline, so the imported text
+		// then registers as an edit and gets written. Setting it first would
+		// look identical on screen and never reach the server -- an import
+		// that appears to work and is gone on the next reload.
+		stores.documents.set(imported);
+		await rename(created.id, name);
 	}
 
 	async function rename(id: number, name: string): Promise<void> {
@@ -171,5 +187,15 @@ export function createCvSessionActions(
 		if (get(stores.activeCv)?.id === id) loadInto(full);
 	}
 
-	return { loadInto, refreshList, switchTo, createNew, rename, duplicate, remove, restore };
+	return {
+		loadInto,
+		refreshList,
+		switchTo,
+		createNew,
+		importFrom,
+		rename,
+		duplicate,
+		remove,
+		restore
+	};
 }

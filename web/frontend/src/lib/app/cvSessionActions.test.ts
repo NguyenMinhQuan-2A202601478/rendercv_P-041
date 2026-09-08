@@ -94,6 +94,50 @@ describe('createCvSessionActions', () => {
 		expect(get(stores.activeCv)).toEqual({ id: 2, name: 'Untitled CV' });
 	});
 
+	it('importFrom opens a new CV holding the imported documents', async () => {
+		const stores = makeStores([{ id: 1, name: 'A', updatedAt: 't1' }], { id: 1, name: 'A' });
+		const autosave = fakeAutosave();
+		const createCv = vi.fn().mockResolvedValue(detail(2, 'Untitled CV'));
+		const actions = createCvSessionActions(stores, autosave, { createCv });
+		const imported = {
+			cv: 'cv:\n  name: Imported\n',
+			design: 'design:\n  theme: classic\n',
+			locale: '',
+			settings: ''
+		};
+
+		await actions.importFrom('My Backup', imported);
+
+		expect(autosave.flush).toHaveBeenCalledTimes(1);
+		expect(get(stores.documents)).toEqual(imported);
+		expect(get(stores.activeCv)).toEqual({ id: 2, name: 'My Backup' });
+		expect(get(stores.cvs)[0]).toEqual({ id: 2, name: 'My Backup', updatedAt: 't2' });
+	});
+
+	it('importFrom leaves the imported documents dirty so the autosave writes them', async () => {
+		// The failure this guards against is silent and only shows on the
+		// next reload: if the documents were set before the baseline, they
+		// would match it, count as unchanged, and never be sent -- an import
+		// that looks perfect until the CV is opened again and is empty.
+		const stores = makeStores([], null);
+		const autosave = fakeAutosave();
+		const created = detail(2, 'Untitled CV');
+		const createCv = vi.fn().mockResolvedValue(created);
+		const actions = createCvSessionActions(stores, autosave, { createCv });
+
+		await actions.importFrom('Backup', {
+			cv: 'cv:\n  name: Imported\n',
+			design: '',
+			locale: '',
+			settings: ''
+		});
+
+		expect(autosave.setBaseline).toHaveBeenCalledTimes(1);
+		const baseline = autosave.setBaseline.mock.calls[0][0];
+		expect(baseline.documents).toEqual(created.documents);
+		expect(get(stores.documents)).not.toEqual(baseline.documents);
+	});
+
 	it('rename of the open CV updates the stores immediately without a network call', async () => {
 		const stores = makeStores([{ id: 1, name: 'A', updatedAt: 't1' }], { id: 1, name: 'A' });
 		const autosave = fakeAutosave();

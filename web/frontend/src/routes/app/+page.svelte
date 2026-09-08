@@ -19,6 +19,7 @@
 	import { auth } from '$lib/stores/auth';
 	import { bootstrapApp } from '$lib/app/bootstrap';
 	import { createCvSessionActions } from '$lib/app/cvSessionActions';
+	import { splitRendercvYaml } from '$lib/editor/exportYaml';
 	import { listCvs, createCv, getCv } from '$lib/api/cvs';
 	import { getPreferences } from '$lib/api/preferences';
 	import type { ValidationError } from '$lib/api/validate';
@@ -115,6 +116,18 @@
 
 	async function handleCreate(): Promise<void> {
 		await cvActions.createNew();
+	}
+
+	async function handleImportFile(file: File): Promise<string | null> {
+		// Resolves to a message rather than throwing: the sidebar has to show
+		// the user why their file was refused, and every refusal here is an
+		// ordinary answer about the file, not a fault in the app.
+		const outcome = splitRendercvYaml(await file.text());
+		if (!outcome.ok) return outcome.reason;
+		// The filename without its extension: the closest thing the file
+		// carries to a name, and better than another "Untitled CV".
+		await cvActions.importFrom(file.name.replace(/\.[^.]+$/, ''), outcome.documents);
+		return null;
 	}
 
 	async function handleRename(id: number, name: string): Promise<void> {
@@ -266,6 +279,7 @@
 			bind:collapsed={sidebarCollapsed}
 			onSwitch={handleSwitch}
 			onCreate={handleCreate}
+			onImportFile={handleImportFile}
 			onRename={handleRename}
 			onDuplicate={handleDuplicate}
 			onDelete={handleDelete}

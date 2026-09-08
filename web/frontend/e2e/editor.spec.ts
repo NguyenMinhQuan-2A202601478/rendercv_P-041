@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 import { gotoReady, firstPreviewUrl } from './helpers';
 
 /**
@@ -163,5 +164,71 @@ test.describe('Downloading the YAML source', () => {
 		await downloadStarted;
 
 		await expect(page.getByRole('menu', { name: 'Download options' })).toHaveCount(0);
+	});
+});
+
+
+test.describe('Importing a YAML file', () => {
+	// The other half of the export. A backup you cannot put back is a file,
+	// not a backup, so the test that matters is the round trip rather than
+	// either direction alone.
+
+	test('a file this app exported comes back in as a new CV', async ({ page }, testInfo) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'More download options' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		// Saved under a name we choose: the CV is named after the file, and
+		// Playwright's own temporary name for a download is random.
+		const saved = testInfo.outputPath('round-trip.yaml');
+		await (await downloadStarted).saveAs(saved);
+
+		// Set on the input directly rather than clicking the button, which
+		// would open the operating system's file dialog.
+		await page.getByLabel('YAML file to import').setInputFiles(saved);
+
+		const list = page.getByRole('navigation', { name: 'Saved CVs' });
+		await expect(list.getByText('round-trip')).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('the imported CV really holds the imported text, after a reload', async ({
+		page
+	}, testInfo) => {
+		// Reloaded on purpose: the import writes through the autosave, and
+		// the failure worth catching is the one where the editor shows the
+		// right thing and the server was never told.
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'More download options' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		const saved = testInfo.outputPath('persisted.yaml');
+		await (await downloadStarted).saveAs(saved);
+
+		await page.getByLabel('YAML file to import').setInputFiles(saved);
+		await expect(page.getByRole('navigation', { name: 'Saved CVs' }).getByText('persisted')).toBeVisible({
+			timeout: 15_000
+		});
+		// Let the debounced save land before throwing the page away.
+		await expect(page.getByText(/saved/i).first()).toBeVisible({ timeout: 20_000 });
+
+		await page.reload();
+		await expect(page.locator('.cm-content')).toContainText('name:', { timeout: 25_000 });
+	});
+
+	test('a file that is not a RenderCV file is refused, and nothing is created', async ({
+		page
+	}, testInfo) => {
+		await gotoReady(page);
+		const list = page.getByRole('navigation', { name: 'Saved CVs' });
+		const before = await list.getByRole('button').count();
+
+		const notACv = testInfo.outputPath('not-a-cv.yaml');
+		await writeFile(notACv, 'Nguyen Minh Quan\nData Scientist\n');
+		await page.getByLabel('YAML file to import').setInputFiles(notACv);
+
+		await expect(page.getByRole('alert')).toContainText('does not start with');
+		expect(await list.getByRole('button').count()).toBe(before);
 	});
 });

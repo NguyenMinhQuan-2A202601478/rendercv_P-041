@@ -82,4 +82,21 @@ def cache_key_for(documents: CvDocuments) -> str:
     return hasher.hexdigest()
 
 
+def image_cache_key_for(documents: CvDocuments) -> str:
+    """Cache key for the PNG render of the same documents.
+
+    Why a separate key rather than a second cache: the PDF and the images
+    come from identical input, so they would collide on `cache_key_for` and
+    one would be served as the other. A suffix keeps them apart in the one
+    cache.
+
+    Args:
+        documents: The four YAML documents.
+
+    Returns:
+        The PDF key with an image marker appended.
+    """
+    return f"{cache_key_for(documents)}:png"
+
+
 render_cache = RenderCache()

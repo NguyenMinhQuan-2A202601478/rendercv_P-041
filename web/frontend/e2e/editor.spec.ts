@@ -117,22 +117,28 @@ test.describe('Downloading the YAML source', () => {
 	// exists because the deployment's database is disposable, so "get your
 	// work out" has to be a button rather than a console snippet.
 
-	test('the menu offers the source as well as the PDF', async ({ page }) => {
+	test('one button offers both formats at the same depth', async ({ page }) => {
+		// It used to be a split control: the left half downloaded the PDF and
+		// the right half opened a menu offering the PDF again, so the format
+		// nobody thinks to look for was the one behind the caret.
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 
 		const menu = page.getByRole('menu', { name: 'Download options' });
-		await expect(menu.getByRole('menuitem', { name: 'Download PDF' })).toBeVisible();
-		await expect(menu.getByRole('menuitem', { name: 'Download YAML' })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'PDF', exact: true })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'YAML', exact: true })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Image', exact: true })).toBeVisible();
+		// The old split control offered "Download PDF" outside the menu.
+		await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(0);
 	});
 
 	test('it saves one file that RenderCV could read back', async ({ page }) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		const download = await downloadStarted;
 
 		// Named after the CV, and sharing its stem with the PDF so both files
@@ -158,15 +164,65 @@ test.describe('Downloading the YAML source', () => {
 	test('the menu closes after the download starts', async ({ page }) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		await downloadStarted;
 
 		await expect(page.getByRole('menu', { name: 'Download options' })).toHaveCount(0);
 	});
 });
 
+
+test.describe('Downloading the CV as images', () => {
+	// A second Typst compilation, so it is rendered on request rather than
+	// kept beside the preview.
+
+	test('every page comes back, archived when there is more than one', async ({
+		page
+	}) => {
+		// The starter CV runs to two pages, so this is the archive path. The
+		// single-page path is covered where it can be built deliberately --
+		// `tests/test_api.py`, `TestRenderImages`.
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Image', exact: true }).click();
+		const download = await downloadStarted;
+
+		expect(download.suggestedFilename()).toMatch(/\.zip$/);
+
+		const stream = await download.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+		const bytes = Buffer.concat(chunks);
+
+		// A real archive, not an error page that happened to download.
+		expect(bytes.subarray(0, 2)).toEqual(Buffer.from('PK'));
+		// Both page entries are named inside it, so no page was dropped.
+		const text = bytes.toString('latin1');
+		expect(text).toContain('page-1.png');
+		expect(text).toContain('page-2.png');
+	});
+
+	test('the file shares its name with the PDF', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const imageStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Image', exact: true }).click();
+		const image = await imageStarted;
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const yamlStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'YAML', exact: true }).click();
+		const yaml = await yamlStarted;
+
+		const stem = (name: string) => name.replace(/\.[^.]+$/, '');
+		expect(stem(image.suggestedFilename())).toBe(stem(yaml.suggestedFilename()));
+	});
+});
 
 test.describe('Importing a YAML file', () => {
 	// The other half of the export. A backup you cannot put back is a file,
@@ -176,9 +232,9 @@ test.describe('Importing a YAML file', () => {
 	test('a file this app exported comes back in as a new CV', async ({ page }, testInfo) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		// Saved under a name we choose: the CV is named after the file, and
 		// Playwright's own temporary name for a download is random.
 		const saved = testInfo.outputPath('round-trip.yaml');
@@ -200,9 +256,9 @@ test.describe('Importing a YAML file', () => {
 		// right thing and the server was never told.
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		const saved = testInfo.outputPath('persisted.yaml');
 		await (await downloadStarted).saveAs(saved);
 

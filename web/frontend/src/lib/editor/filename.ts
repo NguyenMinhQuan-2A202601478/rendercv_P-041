@@ -61,3 +61,13 @@ export function derivePdfFilename(docs: CvDocuments): string {
 export function deriveYamlFilename(docs: CvDocuments): string {
 	return `${derivePdfFilename(docs).replace(/\.pdf$/i, '')}.yaml`;
 }
+
+/**
+ * Derives the image download's filename, sharing the PDF's stem.
+ *
+ * @param docs The editor's four documents.
+ * @param extension `png` for a single page, `zip` for a multi-page CV.
+ */
+export function deriveImageFilename(docs: CvDocuments, extension: string): string {
+	return `${derivePdfFilename(docs).replace(/\.pdf$/i, '')}.${extension}`;
+}

@@ -188,7 +188,7 @@
 				onclick={() => fileInputEl?.click()}
 			>
 				<span class="text-purple-500 dark:text-purple-400">↑</span>
-				{importing ? 'Importing…' : 'Import from YAML'}
+				{importing ? 'Importing…' : 'Import CV'}
 			</button>
 			<input
 				bind:this={fileInputEl}

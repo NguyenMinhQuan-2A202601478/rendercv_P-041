@@ -108,7 +108,22 @@ export function createFormSync(
 			return;
 		}
 
+
 		const result: ParseResult = await parse(yaml);
+
+		// The document may have been replaced while this parse was in
+		// flight -- importing a CV writes twice in quick succession, the
+		// empty CV the server just made and then the imported text. The
+		// subscription below cannot pick the second one up while
+		// `lastKnownCvYaml` is still null, so without this the change was
+		// dropped and the form went on showing the document that is no
+		// longer open. That is how an imported `engineeringresumes` design
+		// was displayed as `classic`.
+		if (currentCvYaml() !== yaml) {
+			void reparse();
+			return;
+		}
+
 		lastKnownCvYaml = yaml;
 		if (result.ok) {
 			state.set({ status: 'ready', data: result.data, errors: [], toast: null });

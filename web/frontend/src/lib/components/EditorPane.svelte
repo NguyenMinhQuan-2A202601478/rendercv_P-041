@@ -334,25 +334,24 @@
 				</button>
 			</div>
 
-			<div class="relative flex items-center" role="group" aria-label="Download">
+			<!--
+				One button, two choices. It used to be a split control whose left
+				half downloaded the PDF and whose right half opened a menu that
+				offered the PDF again -- so the same action sat in two places and
+				the YAML, the one people would not think to look for, was the
+				half that was hidden. Naming the button for the question rather
+				than for one answer puts both formats at the same depth.
+			-->
+			<div class="relative flex items-center">
 				<button
 					type="button"
-					class="whitespace-nowrap rounded-l-md border border-r-0 border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
+					class="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
 					disabled={!$previewState.url}
-					onclick={() => download($previewState.url)}
-				>
-					Download PDF
-				</button>
-				<button
-					type="button"
-					class="grid h-[30px] w-6 place-items-center rounded-r-md border border-neutral-300 text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[var(--border-subtle)] dark:text-neutral-200 dark:hover:bg-[var(--surface-card)]"
-					disabled={!$previewState.url}
-					aria-label="More download options"
 					aria-haspopup="menu"
 					aria-expanded={downloadMenuOpen}
 					onclick={toggleDownloadMenu}
 				>
-					▾
+					Download <span aria-hidden="true">▾</span>
 				</button>
 
 				{#if downloadMenuOpen}
@@ -375,7 +374,7 @@
 								class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
 								onclick={downloadFromMenu}
 							>
-								Download PDF
+								PDF
 							</button>
 						</li>
 						<li role="none">
@@ -388,7 +387,7 @@
 								class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
 								onclick={downloadYamlFromMenu}
 							>
-								Download YAML
+								YAML
 							</button>
 						</li>
 					</ul>

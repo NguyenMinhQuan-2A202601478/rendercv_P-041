@@ -117,22 +117,27 @@ test.describe('Downloading the YAML source', () => {
 	// exists because the deployment's database is disposable, so "get your
 	// work out" has to be a button rather than a console snippet.
 
-	test('the menu offers the source as well as the PDF', async ({ page }) => {
+	test('one button offers both formats at the same depth', async ({ page }) => {
+		// It used to be a split control: the left half downloaded the PDF and
+		// the right half opened a menu offering the PDF again, so the format
+		// nobody thinks to look for was the one behind the caret.
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 
 		const menu = page.getByRole('menu', { name: 'Download options' });
-		await expect(menu.getByRole('menuitem', { name: 'Download PDF' })).toBeVisible();
-		await expect(menu.getByRole('menuitem', { name: 'Download YAML' })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'PDF', exact: true })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'YAML', exact: true })).toBeVisible();
+		// The old split control offered "Download PDF" outside the menu.
+		await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(0);
 	});
 
 	test('it saves one file that RenderCV could read back', async ({ page }) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		const download = await downloadStarted;
 
 		// Named after the CV, and sharing its stem with the PDF so both files
@@ -158,9 +163,9 @@ test.describe('Downloading the YAML source', () => {
 	test('the menu closes after the download starts', async ({ page }) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		await downloadStarted;
 
 		await expect(page.getByRole('menu', { name: 'Download options' })).toHaveCount(0);
@@ -176,9 +181,9 @@ test.describe('Importing a YAML file', () => {
 	test('a file this app exported comes back in as a new CV', async ({ page }, testInfo) => {
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		// Saved under a name we choose: the CV is named after the file, and
 		// Playwright's own temporary name for a download is random.
 		const saved = testInfo.outputPath('round-trip.yaml');
@@ -200,9 +205,9 @@ test.describe('Importing a YAML file', () => {
 		// right thing and the server was never told.
 		await gotoReady(page);
 
-		await page.getByRole('button', { name: 'More download options' }).click();
+		await page.getByRole('button', { name: 'Download' }).click();
 		const downloadStarted = page.waitForEvent('download');
-		await page.getByRole('menuitem', { name: 'Download YAML' }).click();
+		await page.getByRole('menuitem', { name: 'YAML' }).click();
 		const saved = testInfo.outputPath('persisted.yaml');
 		await (await downloadStarted).saveAs(saved);
 

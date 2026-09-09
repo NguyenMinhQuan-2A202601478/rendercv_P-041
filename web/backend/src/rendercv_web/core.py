@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import dataclass
 
 from rendercv.exception import RenderCVUserError
-from rendercv.renderer.pdf_png import generate_pdf
+from rendercv.renderer.pdf_png import generate_pdf, generate_png
 from rendercv.renderer.typst import generate_typst
 from rendercv.schema.rendercv_model_builder import build_rendercv_dictionary_and_model
 
@@ -70,6 +70,50 @@ def validate_documents(documents: CvDocuments) -> None:
         locale_yaml_file=blank_to_none(documents.locale_yaml),
         settings_yaml_file=blank_to_none(documents.settings_yaml),
     )
+
+
+def render_documents_to_pngs(documents: CvDocuments) -> list[bytes]:
+    """Render the four YAML documents to one PNG per page.
+
+    Why a list rather than a single image: a CV is as long as it is, and
+    handing back only the first page would silently lose the rest of
+    somebody's work. The caller decides how to package them.
+
+    Args:
+        documents: The four YAML documents to render.
+
+    Returns:
+        The pages, in order, as PNG file contents.
+
+    Raises:
+        RenderCVUserValidationError: If the documents fail validation.
+        RenderCVUserError: If rendering fails for a user-facing reason, e.g.
+            the settings document disables Typst or PNG generation.
+    """
+    with tempfile.TemporaryDirectory(prefix="rendercv-web-png-") as temp_dir:
+        input_file_path = pathlib.Path(temp_dir) / "cv.yaml"
+        _, model = build_rendercv_dictionary_and_model(
+            documents.cv_yaml,
+            design_yaml_file=blank_to_none(documents.design_yaml),
+            locale_yaml_file=blank_to_none(documents.locale_yaml),
+            settings_yaml_file=blank_to_none(documents.settings_yaml),
+            input_file_path=input_file_path,
+            dont_generate_markdown=True,
+            dont_generate_html=True,
+            # The one difference from the PDF path, and the reason this
+            # function exists: the core defaults to skipping PNGs because the
+            # preview never needed them.
+            dont_generate_png=False,
+        )
+        typst_path = generate_typst(model)
+        png_paths = generate_png(model, typst_path)
+        if not png_paths:
+            message = (
+                "Cannot render images: the settings document disables Typst or"
+                " PNG generation (dont_generate_typst / dont_generate_png)."
+            )
+            raise RenderCVUserError(message=message)
+        return [path.read_bytes() for path in png_paths]
 
 
 def render_documents_to_pdf(documents: CvDocuments) -> bytes:

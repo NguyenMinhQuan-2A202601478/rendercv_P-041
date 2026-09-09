@@ -36,8 +36,15 @@ import os
 import sys
 
 import sqlalchemy as sa
+from rendercv_web.db.session import create_engine_from_url
 
 DATABASE_URL_ENV_VAR = "RENDERCV_WEB_DATABASE_URL"
+
+# What a dashboard shows in place of a secret. Render fills its four
+# connection fields with 110 of these, the same count for all of them, so
+# selecting the text and copying it yields a row of bullets rather than the
+# value -- see `looks_like_a_mask`.
+MASK_CHARACTERS = "\u2022\u25cf\u00b7*\u2219"
 
 
 def resolve_database_url() -> str:
@@ -52,17 +59,89 @@ def resolve_database_url() -> str:
     """
     from_env = os.environ.get(DATABASE_URL_ENV_VAR)
     if from_env:
-        return from_env
+        # Cleaned like a paste, because it usually is one: the shell that
+        # set it may have taken the value from a clipboard, and
+        # `Get-Clipboard` keeps the trailing newline.
+        return clean_pasted_url(from_env)
 
     # `getpass`, not `input`: the string carries the database password, and
     # a terminal's scrollback outlives the session that printed it.
     entered = getpass.getpass(
         "Paste the External Database URL (nothing will appear as you paste): "
-    ).strip()
-    if not entered:
-        print("No connection string given, nothing to do.", file=sys.stderr)
+    )
+    return clean_pasted_url(entered)
+
+
+def clean_pasted_url(entered: str) -> str:
+    """Tidy a pasted connection string, and refuse an unusable one clearly.
+
+    Why this is not left to SQLAlchemy: its answer is
+    `Could not parse SQLAlchemy URL from given URL string`, followed by a
+    stack trace, which does not tell you that you copied the row below the
+    one you meant. Render's Info page offers the URL and a ready-made
+    `psql ...` command directly under it, and the two look alike at a
+    glance.
+
+    Nothing derived from the string is printed: it carries the password.
+
+    Args:
+        entered: Whatever arrived from the prompt.
+
+    Returns:
+        The cleaned connection string.
+
+    Raises:
+        SystemExit: When it cannot be a connection string, with a sentence
+            saying which row to copy instead.
+    """
+    cleaned = entered.strip().strip('"').strip("'")
+    # Render's "PSQL Command" row is the URL with `psql ` in front of it.
+    if cleaned.startswith("psql "):
+        cleaned = cleaned[len("psql ") :].strip().strip('"').strip("'")
+
+    if not cleaned:
+        print("Nothing was pasted, so there is nothing to connect to.", file=sys.stderr)
         raise SystemExit(1)
-    return entered
+
+    if looks_like_a_mask(cleaned):
+        print(
+            "What was pasted is the row of dots the dashboard shows,", file=sys.stderr
+        )
+        print("not the value behind them.", file=sys.stderr)
+        print(file=sys.stderr)
+        print(
+            "Those fields hide their contents, so selecting the text and\n"
+            "copying it gives you the mask. Use the copy button at the end of\n"
+            "the row instead -- it puts the real string on the clipboard\n"
+            "without ever showing it.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    if "://" not in cleaned:
+        print("That does not look like a connection string.", file=sys.stderr)
+        print(file=sys.stderr)
+        print(
+            "On Render, copy the row named *External Database URL* -- the one\n"
+            "starting `postgresql://`. The `Hostname` row on its own is not\n"
+            "enough, and the internal URL only resolves from inside Render.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    return cleaned
+
+
+def looks_like_a_mask(text: str) -> bool:
+    """Whether `text` is a dashboard's placeholder rather than a value.
+
+    Args:
+        text: The cleaned paste.
+
+    Returns:
+        Whether every character is one a dashboard uses to hide a secret.
+    """
+    return bool(text) and all(character in MASK_CHARACTERS for character in text)
 
 
 def mask_email(email: str | None, full: bool) -> str:
@@ -171,13 +250,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    engine = sa.create_engine(resolve_database_url())
+    # The application's own builder, so this script accepts exactly the
+    # URL forms the server does -- `postgres://` included, which
+    # SQLAlchemy itself rejects.
+    engine = create_engine_from_url(resolve_database_url())
     try:
         with engine.connect() as connection:
             if args.cv:
                 print_cv_search(connection, args.cv, args.full_emails)
             else:
                 print_summary(connection, args.full_emails)
+    except sa.exc.ArgumentError as error:
+        print(f"That connection string could not be read: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
     except sa.exc.OperationalError as error:
         print(f"Could not connect: {error.orig}", file=sys.stderr)
         # Offered only for the failure it explains. Printed unconditionally

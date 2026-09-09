@@ -36,6 +36,7 @@ import os
 import sys
 
 import sqlalchemy as sa
+from rendercv_web.db.session import create_engine_from_url
 
 DATABASE_URL_ENV_VAR = "RENDERCV_WEB_DATABASE_URL"
 
@@ -58,11 +59,53 @@ def resolve_database_url() -> str:
     # a terminal's scrollback outlives the session that printed it.
     entered = getpass.getpass(
         "Paste the External Database URL (nothing will appear as you paste): "
-    ).strip()
-    if not entered:
-        print("No connection string given, nothing to do.", file=sys.stderr)
+    )
+    return clean_pasted_url(entered)
+
+
+def clean_pasted_url(entered: str) -> str:
+    """Tidy a pasted connection string, and refuse an unusable one clearly.
+
+    Why this is not left to SQLAlchemy: its answer is
+    `Could not parse SQLAlchemy URL from given URL string`, followed by a
+    stack trace, which does not tell you that you copied the row below the
+    one you meant. Render's Info page offers the URL and a ready-made
+    `psql ...` command directly under it, and the two look alike at a
+    glance.
+
+    Nothing derived from the string is printed: it carries the password.
+
+    Args:
+        entered: Whatever arrived from the prompt.
+
+    Returns:
+        The cleaned connection string.
+
+    Raises:
+        SystemExit: When it cannot be a connection string, with a sentence
+            saying which row to copy instead.
+    """
+    cleaned = entered.strip().strip('"').strip("'")
+    # Render's "PSQL Command" row is the URL with `psql ` in front of it.
+    if cleaned.startswith("psql "):
+        cleaned = cleaned[len("psql ") :].strip().strip('"').strip("'")
+
+    if not cleaned:
+        print("Nothing was pasted, so there is nothing to connect to.", file=sys.stderr)
         raise SystemExit(1)
-    return entered
+
+    if "://" not in cleaned:
+        print("That does not look like a connection string.", file=sys.stderr)
+        print(file=sys.stderr)
+        print(
+            "On Render, copy the row named *External Database URL* -- the one\n"
+            "starting `postgresql://`. The `Hostname` row on its own is not\n"
+            "enough, and the internal URL only resolves from inside Render.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    return cleaned
 
 
 def mask_email(email: str | None, full: bool) -> str:
@@ -171,13 +214,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    engine = sa.create_engine(resolve_database_url())
+    # The application's own builder, so this script accepts exactly the
+    # URL forms the server does -- `postgres://` included, which
+    # SQLAlchemy itself rejects.
+    engine = create_engine_from_url(resolve_database_url())
     try:
         with engine.connect() as connection:
             if args.cv:
                 print_cv_search(connection, args.cv, args.full_emails)
             else:
                 print_summary(connection, args.full_emails)
+    except sa.exc.ArgumentError as error:
+        print(f"That connection string could not be read: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
     except sa.exc.OperationalError as error:
         print(f"Could not connect: {error.orig}", file=sys.stderr)
         # Offered only for the failure it explains. Printed unconditionally

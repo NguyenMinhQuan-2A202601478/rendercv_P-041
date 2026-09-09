@@ -83,6 +83,18 @@ class TestWhatItRefuses:
         message = capsys.readouterr().err
         assert "External Database URL" in message
 
+    def test_a_row_of_mask_dots_is_named_for_what_it_is(self, capsys) -> None:
+        # Render renders its four connection fields as password inputs whose
+        # on-screen contents are 110 bullet characters -- verified in the
+        # live dashboard. Selecting the text and copying it therefore yields
+        # the mask, and the generic "not a connection string" answer would
+        # send the reader looking at the wrong row.
+        with pytest.raises(SystemExit):
+            db_report.clean_pasted_url("•" * 110)
+
+        message = capsys.readouterr().err
+        assert "copy button" in message
+
     def test_the_refusal_never_echoes_what_was_pasted(self, capsys) -> None:
         # The string carries the password. A diagnostic that prints it back
         # puts it in the scrollback, which is how one was leaked already.

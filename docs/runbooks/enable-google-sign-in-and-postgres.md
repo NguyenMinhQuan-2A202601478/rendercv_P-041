@@ -253,6 +253,64 @@ Local sign-in, end to end:
   character.
 - The backend logs a warning on every start while `RENDERCV_WEB_SECRET` is
   unset. Nothing enforces it.
+- A deployment that serves anything at all has a working database
+  connection: the application runs `upgrade_to_head` on startup and exits if
+  it cannot. The reverse does not hold -- `/api/themes`, `/privacy` and an
+  anonymous `/api/auth/me` all answer without touching the database, so a
+  `200` from them proves nothing while a service is starting.
+- Render's deploy list shows a failed deploy directly beside a healthy live
+  one. Read the deploy id in the log header before believing a failure is
+  the current one.
+
+### After every deploy
+
+```
+cd web/backend
+uv run python scripts/smoke_production.py
+```
+
+Twenty-four checks over HTTP against the running deployment, exiting
+non-zero if any fails. `--host` points it somewhere else. It signs in to
+nothing, so it can be run by anyone at any time; the endpoints that must
+stay shut answering **401** is one of the things it asserts.
+
+It exists because two defects reached production while every test on both
+sides passed, and neither was visible from inside a test suite:
+
+- **`typst` drifted between the two lockfiles.** The root pinned 0.14.8 and
+  `web/backend` had resolved 0.15.0, so a CV that `rendercv render` set on
+  one page came out on two in the editor -- same YAML, same fonts,
+  byte-identical Typst source. `web/backend/pyproject.toml` now pins
+  `typst==0.14.8` and `tests/test_typst_version.py` asserts it against the
+  root `uv.lock`. **Raising one means raising both in the same commit**, and
+  expecting `just update-testdata` to have something to say.
+- **`schema.json` was missing from the image.** `GET /api/schema` answered
+  500, and the four form editors are generated from that response, so form
+  mode was dead from the day it shipped -- unnoticed, because the editor
+  opens in YAML mode and everything else worked. `web/Dockerfile` now copies
+  it and calls `load_schema()` at build time, so the build fails rather than
+  the first person who switches to the form.
+
+Both live in the gaps between components rather than in any component, which
+is the class of defect a smoke test is for.
+
+### Who is using the deployment
+
+```
+cd web/backend
+uv run --extra postgres python scripts/db_report.py
+uv run --extra postgres python scripts/db_report.py --cv <name fragment>
+```
+
+Answers how many people have signed in, and which account holds a given CV.
+It asks for the connection string through a hidden prompt rather than taking
+it as an argument, and masks email addresses unless `--full-emails` is
+given -- the database holds other people's CVs, and the published privacy
+policy says the data is not used for anything else.
+
+Paste Render's **External Database URL**, using the copy button beside the
+row. Selecting the text in that field copies the row of dots the dashboard
+displays, not the value behind them; the script recognises that and says so.
 
 ## Ownership And Cleanup
 
@@ -319,16 +377,10 @@ error anywhere in that sequence.
 
 ## Unknowns
 
-Most of what stood here was answered by the deployment on 2026-09-06. Two
-entries are left, and neither is about whether the thing runs.
+Most of what stood here was answered by the deployment on 2026-09-06, and
+the publish gate on 2026-09-08. One entry is left, and it is not about
+whether the thing runs.
 
-- **Everything past the publish gate.** The Console refuses to switch the
-  app to production without a homepage and privacy-policy URL on an
-  authorized domain (confirmed 2026-09-06 by reading the disabled button's
-  tooltip). So whether the non-sensitive scopes really skip verification,
-  and what a stranger's first consent screen looks like, are still
-  unobserved -- and until then only listed test users can sign in, on the
-  deployment as much as on localhost.
 - **Where the deployment stores secrets.** They are Render environment
   variables now, which is where this runbook assumed they would be; it
   still does not choose a secret manager, and `RENDERCV_WEB_SECRET` being
@@ -336,6 +388,30 @@ entries are left, and neither is about whether the thing runs.
   cannot be forgotten.
 
 Answered, and recorded here so the next reader does not re-open them:
+
+- **The app is published and strangers can sign in.** Audience reports
+  `Publishing status: In production`, `User type: External`, and the
+  Verification Center says outright: *"Verification is not required since
+  your app is not requesting any sensitive or restricted scopes."*
+  Confirmed 2026-09-08 by someone outside the test-user list signing in
+  successfully. So the non-sensitive scopes do skip verification, as hoped.
+- **The branding will not verify, and that was accepted.** Google refuses
+  the home-page URL with *"the website ... is not registered to you"*, and
+  it keeps refusing after the domain is verified in Search Console -- the
+  property is verified, owned by the same account that owns the Cloud
+  project, and the verification file is served -- it lives at
+  `web/frontend/static/googlecdc32a5d8f95119a.html` and is guarded by an
+  e2e test, because nothing in the application reads it and deleting it
+  would show no symptom here at all. The remaining explanation is that `onrender.com` is Render's
+  shared domain and the check wants the registrable domain, which will
+  never belong to this project. The consequence is cosmetic: the consent
+  screen does not show the app name, home page or privacy link. **Do not
+  re-run this investigation** -- reopen it only if a custom domain is
+  bought, which would also mean changing the Render custom domain,
+  `GOOGLE_OAUTH_REDIRECT_URI`, the OAuth client's redirect URI, the three
+  Branding URLs, and creating a DNS-verified Search Console property.
+- **Uploading an app logo forces verification.** The Branding page says so
+  itself. It is left empty deliberately.
 
 - **The deployment really is on Postgres**, confirmed 2026-09-06 by
   restarting the service and signing in again: the CVs were still there.

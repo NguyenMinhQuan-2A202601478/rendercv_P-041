@@ -273,6 +273,45 @@ test.describe('Importing a YAML file', () => {
 		await expect(page.locator('.cm-content')).toContainText('name:', { timeout: 25_000 });
 	});
 
+	test('the theme switcher shows the theme that was imported', async ({
+		page
+	}, testInfo) => {
+		// The visible contract: the label must name the theme the CV will
+		// actually render with.
+		//
+		// It does NOT reproduce the bug that prompted it -- the switcher
+		// showing `classic` for an imported `engineeringresumes` design.
+		// That needed the import to land while the first parse was still in
+		// flight, and by the time this test imports, the page has been idle
+		// long enough that it never is. Checked: this test passes with the
+		// fix reverted. `formSync.test.ts` holds the timing still and is
+		// what pins the regression.
+		const file = testInfo.outputPath('themed.yaml');
+		await writeFile(
+			file,
+			[
+				'cv:',
+				'  name: Imported Person',
+				'  sections: {}',
+				'',
+				'design:',
+				'  theme: engineeringresumes',
+				''
+			].join('\n')
+		);
+
+		await gotoReady(page);
+		await page.getByLabel('YAML file to import').setInputFiles(file);
+
+		await expect(page.getByRole('navigation', { name: 'Saved CVs' }).getByText('themed')).toBeVisible({
+			timeout: 15_000
+		});
+		await expect(page.getByRole('button', { name: 'Theme', exact: true })).toHaveText(
+			'Engineering Resumes',
+			{ timeout: 20_000 }
+		);
+	});
+
 	test('a file that is not a RenderCV file is refused, and nothing is created', async ({
 		page
 	}, testInfo) => {

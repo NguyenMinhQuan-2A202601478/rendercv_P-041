@@ -37,6 +37,37 @@ describe('formSync', () => {
 		sync.destroy();
 	});
 
+	it('a document replaced mid-parse is still picked up', async () => {
+		// Importing a CV writes the documents twice in quick succession: the
+		// empty CV the server just created, then the imported text. The
+		// second write lands while the first parse is still in flight, and
+		// the subscription cannot act on it yet -- so the parse itself has
+		// to notice on the way out. Without that the form kept showing the
+		// document that is no longer open, which is how an imported
+		// `engineeringresumes` design was displayed as `classic`.
+		const store = writable(docs('cv:\n  name: Old\n'));
+		const resolvers: ((result: ParseResult) => void)[] = [];
+		const parse = vi.fn(
+			(): Promise<ParseResult> => new Promise((resolve) => resolvers.push(resolve))
+		);
+		const sync = createFormSync(store, { parse, patch: vi.fn() });
+
+		const activation = sync.activate();
+		store.set(docs('cv:\n  name: New\n'));
+
+		// The first parse answers about the document that has been replaced.
+		resolvers[0]({ ok: true, data: { cv: { name: 'Old' } } });
+		await activation;
+
+		// It must have gone round again for the document that is actually open.
+		await vi.waitFor(() => expect(parse).toHaveBeenCalledTimes(2));
+		expect(parse).toHaveBeenLastCalledWith('cv:\n  name: New\n');
+
+		resolvers[1]({ ok: true, data: { cv: { name: 'New' } } });
+		await vi.waitFor(() => expect(get(sync.state).data).toEqual({ cv: { name: 'New' } }));
+		sync.destroy();
+	});
+
 	it('a failed parse surfaces its errors and no data', async () => {
 		const store = writable(docs('cv:\n  name: [\n'));
 		const parse = vi.fn(

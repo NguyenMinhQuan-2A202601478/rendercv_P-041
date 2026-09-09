@@ -61,6 +61,12 @@ WORKDIR /app
 COPY --chown=rendercv:rendercv pyproject.toml uv.lock README.md ./
 COPY --chown=rendercv:rendercv src/ ./src/
 
+# `GET /api/schema` reads this file from the repository root, and the four
+# form editors are generated from what it returns. Left out of the image,
+# the endpoint answers 500 and the whole form mode is dead -- which is easy
+# to miss, because the editor opens in YAML mode and everything else works.
+COPY --chown=rendercv:rendercv schema.json ./
+
 # `README.md` is not documentation ballast here: the backend's
 # `pyproject.toml` declares it as the package readme, so the build fails
 # without it.
@@ -84,6 +90,12 @@ WORKDIR /app/web/backend
 # environment as `rendercv`.
 RUN uv sync --frozen --extra postgres --no-dev --no-cache \
  && chown -R rendercv:rendercv /app/web/backend/.venv
+
+# Prove the schema is loadable rather than merely present: this runs the
+# same function the endpoint runs, so a missing, truncated or unparsable
+# file fails the build instead of the first person who opens the form.
+RUN uv run --frozen --no-dev python -c \
+    "from rendercv_web.schema import load_schema; load_schema()"
 
 COPY --from=frontend --chown=rendercv:rendercv /build/build/ /app/web/frontend-build/
 

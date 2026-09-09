@@ -7,8 +7,10 @@ Why:
 """
 
 import concurrent.futures
+import io
 import logging
 import os
+import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -18,8 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from rendercv.schema.rendercv_model_builder import read_yaml_with_validation_errors
 
-from .cache import cache_key_for, render_cache
-from .core import CvDocuments, render_documents_to_pdf, validate_documents
+from .cache import cache_key_for, image_cache_key_for, render_cache
+from .core import (
+    CvDocuments,
+    render_documents_to_pdf,
+    render_documents_to_pngs,
+    validate_documents,
+)
 from .cvs import router as cvs_router
 from .db.migrate import upgrade_to_head
 from .documents import apply_patch_ops, to_json_safe
@@ -184,6 +191,88 @@ def render(request: CvDocumentsRequest) -> Response:
 
     render_cache.put(key, pdf_bytes)
     return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+@app.post("/api/render/images")
+def render_images(request: CvDocumentsRequest) -> Response:
+    """Render the four CV YAML documents to one PNG per page.
+
+    Why the response type varies:
+        Most CVs are one page, and handing that back as a zip to be
+        unpacked would be worse for the common case. More than one page
+        cannot be a bare PNG without losing pages, so those arrive zipped.
+        `Content-Type` says which, and the caller needs nothing else.
+
+    Why the pages are not thinned to the first:
+        A CV is as long as it is. Returning page one only would look like
+        success and quietly drop the rest.
+
+    Args:
+        request: The four YAML documents to render.
+
+    Returns:
+        `image/png` for a single-page CV, `application/zip` containing
+        `page-1.png`, `page-2.png` ... for a longer one.
+
+    Raises:
+        HTTPException: 413 if a document exceeds the size cap, 504 if the
+            render exceeds the timeout.
+    """
+    enforce_documents_size_cap(request.model_dump())
+    documents = to_documents(request)
+    key = image_cache_key_for(documents)
+
+    cached = render_cache.get(key)
+    if cached is not None:
+        return images_response(cached)
+
+    future = render_executor.submit(render_documents_to_pngs, documents)
+    try:
+        pages = future.result(timeout=RENDER_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError as e:
+        raise HTTPException(status_code=504, detail="Render timed out.") from e
+
+    body = pack_pages(pages)
+    render_cache.put(key, body)
+    return images_response(body)
+
+
+def pack_pages(pages: list[bytes]) -> bytes:
+    """Package rendered pages into the bytes the endpoint returns.
+
+    Args:
+        pages: PNG file contents, in page order.
+
+    Returns:
+        The single page unchanged, or a zip archive of all of them.
+    """
+    if len(pages) == 1:
+        return pages[0]
+    buffer = io.BytesIO()
+    # Stored, not deflated: PNG is already compressed, so deflating again
+    # buys almost nothing and costs CPU this deployment has little of.
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+        for number, page in enumerate(pages, start=1):
+            archive.writestr(f"page-{number}.png", page)
+    return buffer.getvalue()
+
+
+def images_response(body: bytes) -> Response:
+    """Label packed pages so the caller knows what it received.
+
+    Args:
+        body: The bytes from `pack_pages`.
+
+    Returns:
+        A response typed `image/png` or `application/zip`.
+
+    Why the shape is read back off the bytes rather than remembered: the
+    cache stores only the body, so a cache hit has to reach the same answer
+    as a fresh render from the same information.
+    """
+    is_zip = body[:2] == b"PK"
+    media_type = "application/zip" if is_zip else "image/png"
+    return Response(content=body, media_type=media_type)
 
 
 @app.get("/api/schema")

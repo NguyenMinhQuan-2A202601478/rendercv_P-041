@@ -5,7 +5,12 @@
 	import type { PreviewState } from '$lib/preview/renderController';
 	import type { ValidationError } from '$lib/api/validate';
 	import { groupErrorsByDocument } from '$lib/editor/errorClassification';
-	import { derivePdfFilename, deriveYamlFilename } from '$lib/editor/filename';
+	import {
+		deriveImageFilename,
+		derivePdfFilename,
+		deriveYamlFilename
+	} from '$lib/editor/filename';
+	import { renderImages } from '$lib/api/render';
 	import { buildRendercvYaml } from '$lib/editor/exportYaml';
 	import { documents } from '$lib/stores/documents';
 	import { theme } from '$lib/stores/theme';
@@ -46,6 +51,11 @@
 	let canUndo = $state(false);
 	let canRedo = $state(false);
 	let downloadMenuOpen = $state(false);
+	// Images are rendered on demand rather than kept alongside the preview:
+	// a PNG page is roughly ten times a PDF's size, and almost nobody asks
+	// for one. The label says so, because the wait is otherwise unexplained.
+	let renderingImages = $state(false);
+	let imageError = $state<string | null>(null);
 
 	let errorsByTab = $derived(groupErrorsByDocument(errors));
 
@@ -155,6 +165,31 @@
 	function downloadFromMenu(): void {
 		download($previewState.url);
 		closeDownloadMenu();
+	}
+
+	function saveBlob(blob: Blob, filename: string): void {
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = filename;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function downloadImagesFromMenu(): Promise<void> {
+		renderingImages = true;
+		imageError = null;
+		closeDownloadMenu();
+		try {
+			const result = await renderImages($documents);
+			if (!result.ok) {
+				imageError = result.errors[0]?.message ?? 'The images could not be rendered.';
+				return;
+			}
+			saveBlob(result.blob, deriveImageFilename($documents, result.extension));
+		} finally {
+			renderingImages = false;
+		}
 	}
 
 	function downloadYamlFromMenu(): void {
@@ -351,7 +386,8 @@
 					aria-expanded={downloadMenuOpen}
 					onclick={toggleDownloadMenu}
 				>
-					Download <span aria-hidden="true">▾</span>
+					{renderingImages ? 'Rendering…' : 'Download'}
+					<span aria-hidden="true">▾</span>
 				</button>
 
 				{#if downloadMenuOpen}
@@ -390,7 +426,30 @@
 								YAML
 							</button>
 						</li>
+						<li role="none">
+							<!-- Rendered on request, not alongside the preview: this is a
+							second Typst compilation, and a multi-page CV arrives zipped
+							because dropping the pages after the first would look like
+							success. -->
+							<button
+								role="menuitem"
+								type="button"
+								class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800"
+								onclick={downloadImagesFromMenu}
+							>
+								Image
+							</button>
+						</li>
 					</ul>
+				{/if}
+
+				{#if imageError}
+					<p
+						role="alert"
+						class="absolute right-0 top-full z-20 mt-1 w-64 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-800 shadow-lg dark:bg-red-950 dark:text-red-200"
+					>
+						{imageError}
+					</p>
 				{/if}
 			</div>
 

@@ -128,6 +128,7 @@ test.describe('Downloading the YAML source', () => {
 		const menu = page.getByRole('menu', { name: 'Download options' });
 		await expect(menu.getByRole('menuitem', { name: 'PDF', exact: true })).toBeVisible();
 		await expect(menu.getByRole('menuitem', { name: 'YAML', exact: true })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Image', exact: true })).toBeVisible();
 		// The old split control offered "Download PDF" outside the menu.
 		await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(0);
 	});
@@ -172,6 +173,56 @@ test.describe('Downloading the YAML source', () => {
 	});
 });
 
+
+test.describe('Downloading the CV as images', () => {
+	// A second Typst compilation, so it is rendered on request rather than
+	// kept beside the preview.
+
+	test('every page comes back, archived when there is more than one', async ({
+		page
+	}) => {
+		// The starter CV runs to two pages, so this is the archive path. The
+		// single-page path is covered where it can be built deliberately --
+		// `tests/test_api.py`, `TestRenderImages`.
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const downloadStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Image', exact: true }).click();
+		const download = await downloadStarted;
+
+		expect(download.suggestedFilename()).toMatch(/\.zip$/);
+
+		const stream = await download.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+		const bytes = Buffer.concat(chunks);
+
+		// A real archive, not an error page that happened to download.
+		expect(bytes.subarray(0, 2)).toEqual(Buffer.from('PK'));
+		// Both page entries are named inside it, so no page was dropped.
+		const text = bytes.toString('latin1');
+		expect(text).toContain('page-1.png');
+		expect(text).toContain('page-2.png');
+	});
+
+	test('the file shares its name with the PDF', async ({ page }) => {
+		await gotoReady(page);
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const imageStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'Image', exact: true }).click();
+		const image = await imageStarted;
+
+		await page.getByRole('button', { name: 'Download' }).click();
+		const yamlStarted = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: 'YAML', exact: true }).click();
+		const yaml = await yamlStarted;
+
+		const stem = (name: string) => name.replace(/\.[^.]+$/, '');
+		expect(stem(image.suggestedFilename())).toBe(stem(yaml.suggestedFilename()));
+	});
+});
 
 test.describe('Importing a YAML file', () => {
 	// The other half of the export. A backup you cannot put back is a file,

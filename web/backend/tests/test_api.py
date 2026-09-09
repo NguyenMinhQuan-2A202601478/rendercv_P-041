@@ -7,6 +7,8 @@ Why:
     api-implementation skill.
 """
 
+import io
+import zipfile
 from typing import Any
 
 import pytest
@@ -36,6 +38,26 @@ def minimal_request(**overrides: str) -> dict[str, str]:
     }
     body.update(overrides)
     return body
+
+
+def long_cv_yaml() -> str:
+    """Build a CV with enough content to spill onto a second page.
+
+    Returns:
+        A `cv:` document with many entries.
+    """
+    lines = ["cv:", "  name: John Doe", "  sections:", "    experience:"]
+    for index in range(40):
+        lines += [
+            f"      - company: Company {index}",
+            "        position: Engineer",
+            "        start_date: 2020-01",
+            "        end_date: 2021-01",
+            "        highlights:",
+            f"          - Did a considerable amount of work, number {index}.",
+            "          - And a second line so the entry is not a single row.",
+        ]
+    return "\n".join(lines) + "\n"
 
 
 class TestValidate:
@@ -139,6 +161,70 @@ class TestRender:
         # Still exactly one cache entry: the second request was a cache hit,
         # not a second render being cached under a new key.
         assert len(render_cache.entries) == 1
+
+
+class TestRenderImages:
+    """Contract tests for `POST /api/render/images`."""
+
+    def test_a_one_page_cv_comes_back_as_a_bare_png(self, client: TestClient) -> None:
+        # The common case. Zipping a single image would make everyone unpack
+        # an archive to reach one file.
+        response = client.post("/api/render/images", json=minimal_request())
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    def test_a_longer_cv_comes_back_as_a_zip_of_every_page(
+        self, client: TestClient
+    ) -> None:
+        # The failure this guards against is the quiet one: returning only
+        # page one would look exactly like success.
+        response = client.post(
+            "/api/render/images", json=minimal_request(cv_yaml=long_cv_yaml())
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+            assert len(names) > 1
+            assert names == sorted(names)
+            for name in names:
+                assert archive.read(name).startswith(b"\x89PNG\r\n\x1a\n")
+
+    def test_images_do_not_collide_with_the_pdf_in_the_cache(
+        self, client: TestClient
+    ) -> None:
+        # Same documents, two outputs. Sharing one key would serve a PDF as
+        # an image, or the other way round.
+        pdf = client.post("/api/render", json=minimal_request())
+        images = client.post("/api/render/images", json=minimal_request())
+
+        assert pdf.content.startswith(b"%PDF-")
+        assert images.content.startswith(b"\x89PNG\r\n\x1a\n")
+        assert len(render_cache.entries) == 2
+
+    def test_a_cache_hit_keeps_the_same_content_type(self, client: TestClient) -> None:
+        # The cache stores only bytes, so the second answer has to work out
+        # the shape again from them alone.
+        first = client.post("/api/render/images", json=minimal_request())
+        assert len(render_cache.entries) == 1
+
+        second = client.post("/api/render/images", json=minimal_request())
+
+        assert second.content == first.content
+        assert second.headers["content-type"] == first.headers["content-type"]
+        assert len(render_cache.entries) == 1
+
+    def test_oversized_document_returns_413(self, client: TestClient) -> None:
+        oversized = "cv:\n  name: " + ("a" * (MAX_DOCUMENT_BYTES + 1)) + "\n"
+
+        response = client.post(
+            "/api/render/images", json=minimal_request(cv_yaml=oversized)
+        )
+
+        assert response.status_code == 413
 
 
 class TestSchema:

@@ -66,6 +66,26 @@ class TestWhatPeopleActuallyPaste:
         assert db_report.clean_pasted_url(legacy) == legacy
 
 
+class TestTheEnvironmentVariable:
+    """The other way in, which is also usually a paste."""
+
+    def test_a_trailing_newline_from_the_clipboard_is_stripped(
+        self, monkeypatch
+    ) -> None:
+        # PowerShell's `Get-Clipboard -Raw` keeps the trailing newline, and
+        # setting the variable from it is the way round `getpass` not
+        # receiving a paste on Windows. Untrimmed it reaches SQLAlchemy as a
+        # malformed URL.
+        monkeypatch.setenv(db_report.DATABASE_URL_ENV_VAR, URL + "\r\n")
+
+        assert db_report.resolve_database_url() == URL
+
+    def test_a_psql_prefix_in_the_variable_is_stripped_too(self, monkeypatch) -> None:
+        monkeypatch.setenv(db_report.DATABASE_URL_ENV_VAR, f"psql {URL}")
+
+        assert db_report.resolve_database_url() == URL
+
+
 class TestWhatItRefuses:
     """Refusals have to say which row to copy instead."""
 

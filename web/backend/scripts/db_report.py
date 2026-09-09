@@ -59,7 +59,10 @@ def resolve_database_url() -> str:
     """
     from_env = os.environ.get(DATABASE_URL_ENV_VAR)
     if from_env:
-        return from_env
+        # Cleaned like a paste, because it usually is one: the shell that
+        # set it may have taken the value from a clipboard, and
+        # `Get-Clipboard` keeps the trailing newline.
+        return clean_pasted_url(from_env)
 
     # `getpass`, not `input`: the string carries the database password, and
     # a terminal's scrollback outlives the session that printed it.

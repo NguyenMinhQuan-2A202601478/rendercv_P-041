@@ -228,3 +228,5 @@ graphify-out/.graphify_root
 full_repository/
 docs/assets/rendercv_skill/
 image/
+.harness-core/
+.harness-backup/

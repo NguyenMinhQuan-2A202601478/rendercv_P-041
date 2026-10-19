@@ -1,9 +1,13 @@
 # Render blueprint for the web editor.
 #
-# Render reads this on "New > Blueprint" and creates both the service and
-# its database. Everything here is declarative except the two Google
+# Render reads this on "New > Blueprint" and creates the service.
+# Everything here is declarative except the database URL and the Google
 # secrets, which are marked `sync: false` so Render prompts for them
 # instead of this file carrying them into a public repository.
+#
+# The database is Supabase, not Render's own Postgres. Render's free
+# database expires about a month after creation and is then deleted with
+# its data -- which is how the first deployment went down on 2026-10-19.
 #
 # The image is `web/Dockerfile`, built from the repository root -- the
 # backend depends on the core as an editable path dependency and needs its
@@ -32,11 +36,13 @@ services:
         value: "1"
 
       # SQLite in a container is lost on every restart, taking every user's
-      # CVs with it, so the database is a real one.
+      # CVs with it, so the database is a real one: Supabase's **Session
+      # pooler** string (Connect -> Session pooler), password filled in.
+      # Not the direct connection, which is IPv6-only and unreachable from
+      # Render; not the Transaction pooler (port 6543), which breaks the
+      # prepared statements psycopg 3 uses.
       - key: RENDERCV_WEB_DATABASE_URL
-        fromDatabase:
-          name: rendercv-web-db
-          property: connectionString
+        sync: false
 
       # From Google Cloud Console. Render asks for these at deploy time.
       # Until they are set, `/app` says sign-in is not configured and the
@@ -56,8 +62,3 @@ services:
       # and the API are the same origin here, so there is no cross-origin
       # request to allow -- see the CORS note in `web/README.md` for why
       # splitting them does not work.
-
-databases:
-  - name: rendercv-web-db
-    plan: free
-    databaseName: rendercv_web

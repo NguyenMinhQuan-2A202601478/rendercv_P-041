@@ -331,12 +331,17 @@ thượng nguồn, việc khác hẳn.
 
 ### Render
 
-[`render.yaml`](../render.yaml) là blueprint dựng sẵn service và database.
-Trên Render chọn *New → Blueprint*, trỏ vào repository này.
+[`render.yaml`](../render.yaml) là blueprint dựng sẵn service. Trên Render
+chọn *New → Blueprint*, trỏ vào repository này.
 
-Render tự sinh `RENDERCV_WEB_SECRET` và tự nối chuỗi kết nối Postgres. Ba
-biến Google được đánh dấu `sync: false` nên Render sẽ hỏi lúc deploy, thay vì
-nằm trong file công khai.
+Render tự sinh `RENDERCV_WEB_SECRET`. `RENDERCV_WEB_DATABASE_URL` và ba biến
+Google được đánh dấu `sync: false` nên Render sẽ hỏi lúc deploy, thay vì nằm
+trong file công khai.
+
+Database là **Supabase**, không phải Postgres của Render: bản free của
+Render hết hạn sau khoảng một tháng rồi bị xoá cùng dữ liệu (deployment đầu
+tiên đã sập vì vậy, 2026-10-19). Lấy chuỗi kết nối theo mục
+[Postgres](#postgres) bên dưới.
 
 Sau lần deploy đầu, Render cấp hostname — lúc đó mới điền được
 `GOOGLE_OAUTH_REDIRECT_URI` và khai đúng URI đó trong Google Cloud Console:
@@ -398,6 +403,19 @@ postgresql+psycopg://...    (dạng SQLAlchemy đầy đủ)
 
 Không cần chạy migration bằng tay: backend tự nâng schema lên bản mới nhất
 lúc khởi động.
+
+**Với Supabase, dùng chuỗi Session pooler** (nút *Connect* → *Session
+pooler*), dạng `postgresql://postgres.<project-ref>:<mật-khẩu>@aws-0-<region>.pooler.supabase.com:5432/postgres`:
+
+- *Direct connection* (`db.<project-ref>.supabase.co`) chỉ có IPv6 ở gói
+  free, Render không kết nối tới được.
+- *Transaction pooler* (cổng `6543`) làm hỏng prepared statement mà
+  psycopg 3 dùng; lỗi chỉ xuất hiện sau vài truy vấn.
+- Mật khẩu có ký tự đặc biệt (`@`, `#`, `/`…) phải được URL-encode.
+- Chọn region gần service (`rendercv-web` ở Oregon → *West US (Oregon)*).
+- Project free của Supabase **bị tạm dừng sau 7 ngày không có hoạt động**.
+  Dữ liệu vẫn còn, bấm *Restore* trong dashboard Supabase là chạy lại; trong
+  lúc tạm dừng, backend chết lúc khởi động giống hệt khi mất database.
 
 ### CORS
 

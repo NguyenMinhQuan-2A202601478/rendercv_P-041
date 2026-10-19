@@ -34,7 +34,12 @@ nothing while the database is gone. The way back is one of:
    `render.yaml`. Same data loss as option 2 unless the data is copied first,
    which needs the database to be reachable -- that is, option 1 first.
 
-The choice is about money and users' data, so it is the owner's.
+**Chosen: option 3, Supabase, without copying the data.** The existing
+accounts and CVs on the expired database are given up. `render.yaml` no
+longer declares a database; `RENDERCV_WEB_DATABASE_URL` is `sync: false`
+and takes Supabase's Session pooler string -- the steps are in
+[the runbook](../../runbooks/enable-google-sign-in-and-postgres.md#supabase-the-production-database-since-2026-10-19).
+The service comes back once that variable is set on Render.
 
 ## Work merged after the plan closed (PR #20 – #54)
 

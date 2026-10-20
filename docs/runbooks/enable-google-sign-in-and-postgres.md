@@ -174,6 +174,52 @@ installed driver, because SQLAlchemy has no `postgres` dialect and defaults
 The application also migrates on startup, so no manual step is needed
 afterwards.
 
+### Supabase (the production database since 2026-10-19)
+
+Replaced Render's managed Postgres after its free instance expired.
+
+1. In Supabase, create a project in **West US (Oregon)**, the service's
+   region. Keep the database password out of chat and commits.
+2. **Connect → Session pooler**, copy the URI and fill in the password
+   (URL-encoded if it has `@`, `#`, `/` or `:`):
+   `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`
+   - Not *Direct connection*: on the free plan it is IPv6-only, and Render
+     cannot reach it -- the failure is the same `failed to resolve host` or
+     `Network is unreachable` at startup.
+   - Not *Transaction pooler* (port 6543): it does not keep prepared
+     statements, and psycopg 3 prepares a query after its fifth run, so the
+     app works for a few requests and then fails with
+     `prepared statement ... does not exist`.
+3. Optionally run `alembic upgrade head` against it from a laptop first
+   (see above) to see `Context impl PostgresqlImpl` before the service does.
+4. Render → `rendercv-web` → **Environment** → set
+   `RENDERCV_WEB_DATABASE_URL` to that string → **Save**. Saving deploys;
+   the startup migration creates the schema in the empty database.
+5. Sign in, write a CV, restart the service, check the CV is still there
+   (see **Unknowns** for why this check and not a lighter one).
+
+Done on 2026-10-19 against project `pljtgdmrbjiiguymfhjj` (East US, Ohio --
+the free plan offers only continent-level regions). The deploy at 7:30 PM
+went live, a CV written after signing in survived a service restart, and
+its rows were visible in Supabase's Table Editor. Getting there took four
+failed deploys, each with a distinct log line worth recognizing:
+
+| Log line | Cause |
+| --- | --- |
+| `failed to resolve host 'dpg-...'` | The variable still held the old Render URL -- not saved, or saved on another service |
+| `password authentication failed for user "postgres"` | `[YOUR-PASSWORD]`'s brackets left in, or a password reset not yet in the URL |
+| `failed to resolve host '<text>@aws-0-...pooler.supabase.com'` | An unencoded `@` in the password |
+
+Separately, two deploys sat on *Deploying...* for 13-18 minutes without a
+single log line from the app, before Render timed them out. That is
+Render's free plan scheduling the container, not the application; deploy
+once and wait rather than re-triggering, which cancels the one in flight.
+
+A free Supabase project **pauses after 7 days without activity**. Unlike
+Render's expiry nothing is deleted -- *Restore project* in the Supabase
+dashboard brings it back -- but while paused the web service fails every
+start exactly as it did when the Render database disappeared.
+
 ### Rotating the database password on Render
 
 Done once, on 2026-09-07, after the password leaked. It took the deployment
@@ -423,8 +469,19 @@ Answered, and recorded here so the next reader does not re-open them:
   sign-in proves only that *a* database accepted a write; it does not say
   which. On Render's free plan the service sleeps after fifteen minutes of
   no traffic, so on SQLite that loss would happen several times a day.
-- The Postgres provider is Render's managed database, connected by
-  `render.yaml` rather than by a pasted connection string, so its TLS and
-  network policy never had to be worked out by hand.
+- The Postgres provider was Render's managed database until 2026-10-19,
+  connected by `render.yaml` rather than by a pasted connection string. It
+  is now Supabase, by a pasted string -- see **Supabase** above. The
+  password-rotation section above describes the Render database and no
+  longer applies as written.
+- **Render's free Postgres expires.** It did, about a month after
+  creation: by 2026-10-19 the dashboard showed *"Free database expired"*,
+  the database was suspended with deletion due within a day, and the web
+  service failed every start with `failed to resolve host
+  'dpg-daen9if40ujc73fumqn0-a'`. The web service's own deploy history stays
+  green throughout, so the deploy list is not where this shows -- the
+  database page and the application logs are. `plan: free` on the database
+  in `render.yaml` is only fit for a demo; anything holding real users' CVs
+  needs a paid plan or a provider without an expiry.
 - The production domain is `rendercv-web-uk68.onrender.com`, and the
   redirect URI is that host plus `/api/auth/google/callback`.

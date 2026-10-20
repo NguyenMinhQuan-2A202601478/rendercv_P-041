@@ -478,7 +478,8 @@ Answered, and recorded here so the next reader does not re-open them:
   creation: by 2026-10-19 the dashboard showed *"Free database expired"*,
   the database was suspended with deletion due within a day, and the web
   service failed every start with `failed to resolve host
-  'dpg-daen9if40ujc73fumqn0-a'`. The web service's own deploy history stays
+  'dpg-daen9if40ujc73fumqn0-a'`. It was deleted by hand on 2026-10-20,
+  after the move to Supabase reached `main`. The web service's own deploy history stays
   green throughout, so the deploy list is not where this shows -- the
   database page and the application logs are. `plan: free` on the database
   in `render.yaml` is only fit for a demo; anything holding real users' CVs

@@ -198,6 +198,23 @@ Replaced Render's managed Postgres after its free instance expired.
 5. Sign in, write a CV, restart the service, check the CV is still there
    (see **Unknowns** for why this check and not a lighter one).
 
+Done on 2026-10-19 against project `pljtgdmrbjiiguymfhjj` (East US, Ohio --
+the free plan offers only continent-level regions). The deploy at 7:30 PM
+went live, a CV written after signing in survived a service restart, and
+its rows were visible in Supabase's Table Editor. Getting there took four
+failed deploys, each with a distinct log line worth recognizing:
+
+| Log line | Cause |
+| --- | --- |
+| `failed to resolve host 'dpg-...'` | The variable still held the old Render URL -- not saved, or saved on another service |
+| `password authentication failed for user "postgres"` | `[YOUR-PASSWORD]`'s brackets left in, or a password reset not yet in the URL |
+| `failed to resolve host '<text>@aws-0-...pooler.supabase.com'` | An unencoded `@` in the password |
+
+Separately, two deploys sat on *Deploying...* for 13-18 minutes without a
+single log line from the app, before Render timed them out. That is
+Render's free plan scheduling the container, not the application; deploy
+once and wait rather than re-triggering, which cancels the one in flight.
+
 A free Supabase project **pauses after 7 days without activity**. Unlike
 Render's expiry nothing is deleted -- *Restore project* in the Supabase
 dashboard brings it back -- but while paused the web service fails every

@@ -1,8 +1,34 @@
 # Session Handoff — RenderCV Web Editor
 
-Last updated: 2026-10-20, after the Supabase move reached `main`. Read this
+Last updated: 2026-11-02, a status check with no code changes. Read this
 together with [cv-editor-web-app.md](cv-editor-web-app.md), whose Progress
 section carries the per-phase verification evidence.
+
+## Status on 2026-11-02: still up, nothing new merged
+
+No commits since 2026-10-20. `develop` is one docs PR ahead of `main`:
+PR #58 (the 2026-10-20 handoff below) is merged into `develop`, and its
+release PR #59 (`develop → main`) is open and mergeable, waiting for the
+user.
+
+Checked from outside on 2026-11-02:
+
+- `GET /api/themes` answered 200 after about 32 s, which is a cold start
+  of the sleeping free instance. Startup runs the database migration
+  (`lifespan` → `upgrade_to_head` in `web/backend/src/rendercv_web/app.py`),
+  so a completed start means Supabase was reachable and **not paused**,
+  13 days after the move.
+- `GET /api/auth/me` answered 200 with `provider_available: true`: Google
+  sign-in is still configured.
+
+Still open from 2026-10-20:
+
+- Whether the database password pasted into chat was reset is not recorded.
+  If not, reset it under Supabase → Database → Settings and save the new
+  Session pooler string on Render.
+- Merge PR #59 so `main` carries the same docs as `develop`. It changes
+  only documentation, so the auto-deploy it triggers changes nothing users
+  see.
 
 ## Status on 2026-10-20: back up, on Supabase
 

@@ -1,49 +1,57 @@
 # Session Handoff — RenderCV Web Editor
 
-Last updated: 2026-10-19, after checking the Render dashboard. Read this
+Last updated: 2026-10-20, after the Supabase move reached `main`. Read this
 together with [cv-editor-web-app.md](cv-editor-web-app.md), whose Progress
 section carries the per-phase verification evidence.
 
-## Status on 2026-10-19: the deployment is down
+## Status on 2026-10-20: back up, on Supabase
 
-`main` is at PR #54 (`9e420e1`, last code change 2026-09-10), and `develop`
-carries nothing beyond it. Every one of the 28 deploys of `rendercv-web`
-built and went live, through PR #54. Nothing has been merged since.
+`main` and `develop` are identical at PR #57 (`a5a2ea83`). The deployment
+is live and its database is Supabase.
 
-**The service is now failing at startup, and it is not the code.** On the
-Render dashboard:
+| Resource | Status |
+| --- | --- |
+| `rendercv-web` (Render, Docker, free) | Live. The auto-deploy of `a5a2ea83` went live in about a minute on 2026-10-20; `/api/themes`, `/` and `/app` answer 200 |
+| Supabase project `RenderCV-Web` (`pljtgdmrbjiiguymfhjj`, us-east-2, free) | Holds the data. Reached through the **Session pooler**, port 5432. Sign-in, creating a CV, and the CV surviving a restart were checked by hand on 2026-10-19 |
+| `rendercv-web-db` (Render Postgres, free) | **Deleted** by the user on 2026-10-20. It had expired on 2026-10-19 and its data was given up, not copied |
+| `p041-backend` and the `P041-Version-3.0` Blueprint | Another repository's. Not this project |
 
-| Resource | Status | Cause |
-| --- | --- | --- |
-| `rendercv-web-db` (Postgres, free) | Suspended by Render | *Free database expired.* Render deletes it and its data **within a day** unless it is upgraded to a paid plan |
-| `rendercv-web` (Docker, free) | Failed service | The startup migration cannot reach the database: `psycopg.OperationalError: failed to resolve host 'dpg-daen9if40ujc73fumqn0-a'`, then `Application startup failed. Exiting.` |
-| `p041-backend` | Failed deploy | Built from a different repository (`P041-Version-3.0`), one Blueprint deploy a month ago. Not this project |
+### What happened, 2026-10-19 → 2026-10-20
 
-Render's free Postgres has a fixed lifetime from creation; the database was
-created about a month before this check. Redeploying the web service changes
-nothing while the database is gone. The way back is one of:
+Render's free Postgres expires about a month after creation. On 2026-10-19
+it was suspended (*"Free database expired"*), and every start of the web
+service failed with `failed to resolve host 'dpg-daen9if40ujc73fumqn0-a'`.
+The options were: upgrade it to paid, recreate another free one (which
+expires the same way), or move to a provider without an expiry.
 
-1. **Upgrade `rendercv-web-db` to a paid instance** before deletion. Keeps
-   every user's CVs and needs no change here.
-2. **Let it go and recreate it.** Create a new free database (from the
-   Blueprint, or by hand) and point `RENDERCV_WEB_DATABASE_URL` at it; the
-   migrations run on startup. Every existing account and CV is lost, and the
-   new database expires the same way.
-3. **Move to a provider without an expiry** (Neon, Supabase), setting
-   `RENDERCV_WEB_DATABASE_URL` by hand and dropping `fromDatabase` from
-   `render.yaml`. Same data loss as option 2 unless the data is copied first,
-   which needs the database to be reachable -- that is, option 1 first.
+**Chosen: move to Supabase, without copying the data.** The existing
+accounts and CVs were given up.
 
-**Chosen: option 3, Supabase, without copying the data.** The existing
-accounts and CVs on the expired database are given up. `render.yaml` no
-longer declares a database; `RENDERCV_WEB_DATABASE_URL` is `sync: false`
-and takes Supabase's Session pooler string -- the steps are in
-[the runbook](../../runbooks/enable-google-sign-in-and-postgres.md#supabase-the-production-database-since-2026-10-19).
-The service comes back once that variable is set on Render.
+- PR #55: this handoff and the runbook record the outage.
+- PR #56: `render.yaml` no longer declares a database;
+  `RENDERCV_WEB_DATABASE_URL` is `sync: false` and holds Supabase's Session
+  pooler string, set by hand on Render. The steps and the failures met on the
+  way (password left in brackets, an unencoded `@`, the direct connection
+  being IPv6-only, deploys hanging on free-plan scheduling) are in
+  [the runbook](../../runbooks/enable-google-sign-in-and-postgres.md#supabase-the-production-database-since-2026-10-19).
+- PR #57: release `develop → main`.
+- The old Render database was deleted afterwards, once nothing pointed at it.
 
-## Work merged after the plan closed (PR #20 – #54)
+### Watch for
 
-All of it on `main` and deployed:
+- **A free Supabase project pauses after 7 days without activity.** The
+  service then fails at startup the same way. *Restore* on the Supabase
+  dashboard brings it back with the data intact.
+- A free Render instance sleeps after 15 minutes; the first request then
+  takes 30–60 s. Deploys on the free plan can also wait 10+ minutes for a
+  container with no application log at all -- that is Render, not the code.
+- The database password was pasted into a chat session during the move; it
+  should be (or have been) reset under Supabase → Database → Settings, and
+  the new string saved on Render.
+
+## Work merged after the plan closed (PR #20 – #57)
+
+All of it on `main` and deployed (PR #55 – #57 are the Supabase move above):
 
 - Deployment proved on Render: Postgres confirmed by restart, a smoke test
   from outside, schema.json and the core's Typst baked into the image, the

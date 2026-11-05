@@ -1,8 +1,39 @@
 # Session Handoff — RenderCV Web Editor
 
-Last updated: 2026-10-20, after the Supabase move reached `main`. Read this
+Last updated: 2026-11-05, after PR #70 reached `develop`. Read this
 together with [cv-editor-web-app.md](cv-editor-web-app.md), whose Progress
 section carries the per-phase verification evidence.
+
+## Work merged into `develop` after PR #57 (PR #61 – #70)
+
+Editor fixes and features, one PR each:
+
+- **PR #61 — the form no longer makes the whole page scroll.** The form's
+  `sr-only` labels were placed against `<body>`, so the page grew to about
+  8000 px. The four form scroll containers are now `relative`.
+- **PR #62 — a Reset button beside the theme switcher.** It shows an amber
+  dot and lists the overriding paths when the design differs from the
+  theme's defaults (from `GET /api/themes`). Clicking it asks first, then
+  rewrites the design block from the defaults.
+- **PR #64 — the undo and redo buttons are restyled** as rounded tiles with
+  corner-arrow icons, glowing in dark mode and raised in light mode.
+- **PR #66 — the page footer is off by default.** The "NAME -- PAGE/TOTAL"
+  footer prints only when `design.page.show_footer` is `true`. This touches
+  the core: the schema, docs, example YAMLs and test references were
+  regenerated.
+- **PR #68 — each theme's design is remembered per CV.** Leaving a theme
+  stores its design, and coming back to it restores that design instead of
+  the defaults. The data lives in a new `cvs.theme_designs` column
+  (migration `b7d2e41c9a05`) behind `GET/PUT /api/cvs/{id}/theme-designs/{theme}`.
+  The alternatives and tradeoffs are in
+  [decision 0001](../../decisions/0001-remember-each-themes-design-per-cv.md).
+  **Rollback caveat:** after this migration, older code fails at startup.
+  Run `alembic downgrade 320e31bb905f` before deploying older code.
+- **PR #70 — the last CVs in the list can open their actions menu.** The
+  actions menu, history popover and delete confirmation are now fixed to
+  the viewport and flip above the ⋯ button when there is no room below.
+  Before this, they were clipped by the list and the footer, so those CVs
+  could not be renamed or deleted.
 
 ## Status on 2026-10-20: back up, on Supabase
 
@@ -134,6 +165,8 @@ None of it blocking, all of it recorded in the plan's Result section:
 - Placeholder documents are defined twice — `web/backend/defaults.py` and
   the frontend's `createDefaultDocuments()` — with no shared source.
 - The versions/history panel has no e2e coverage.
+- Version history does not snapshot the remembered theme designs
+  (PR #68); restoring an old version leaves them as they are.
 - Harness payload files (`.agents/`, `.harness-core/`,
   `docs/assets/rendercv_skill.zip`) and `graphify-out/` sit modified by
   hooks and uncommitted; commit as a chore or discard, the user's call.

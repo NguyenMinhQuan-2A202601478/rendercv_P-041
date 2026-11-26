@@ -1,16 +1,19 @@
 # Session Handoff — RenderCV Web Editor
 
-Last updated: 2026-11-26, after a deployment check. Read this
+Last updated: 2026-11-26, after release PR #75 went live. Read this
 together with [cv-editor-web-app.md](cv-editor-web-app.md), whose Progress
 section carries the per-phase verification evidence.
 
 ## Status on 2026-11-26: live, after two outages caused by the database
 
-`main` is at PR #71 (`7676d84b`) and that commit is what Render serves.
+`main` is at release PR #75 (`5799e137`) and that commit is what Render
+serves: deploy `dep-dc3qivbbc2fs738smgvg`, triggered by the merge at
+10:37 AM (+07:00), live about a minute later.
 
 | Check (2026-11-26) | Result |
 | --- | --- |
-| Render `rendercv-web` | Live on `7676d84`. `/`, `/app`, `/api/themes` answer 200; the first request took 52 s (free instance waking up) |
+| Render `rendercv-web`, before the release | Live on `7676d84`. `/`, `/app`, `/api/themes` answer 200; the first request took 52 s (free instance waking up) |
+| Render `rendercv-web`, after the release | Live on `5799e137`. `/`, `/app`, `/api/themes` answer 200, and the served bundle `nodes/3.*.js` contains `color-scheme: light` (PR #73's fix) |
 | Supabase `RenderCV-Web` | Status *Healthy*, Nano, 5/60 connections |
 | Real use after recovery (10:11 AM) | A signed-in session ran `/api/auth/me`, `/api/cvs`, `/api/render`, `PUT /api/cvs/30` -- all 200/204, so the database reads and writes again |
 | `/api/cvs` without a session | 401 *Sign in to use this endpoint.* -- expected |
@@ -51,11 +54,35 @@ All on `main` and deployed:
 - PR #70: the last CVs in the list can open their actions menu (it was clipped).
 - PR #59, #63, #65, #67, #69, #71: `develop → main` releases.
 
-Open on 2026-11-26, not yet merged:
+## Work released on 2026-11-26 (PR #72 – #75)
 
 - PR #73: the CV preview stays white paper in dark mode. The preview iframe
   had inherited `color-scheme: dark`, so Chrome's PDF viewer painted the
-  pages dark.
+  pages dark. Confirmed by eye on a side-by-side test page (same PDF, dark
+  page: the iframe without the fix rendered dark, the one with
+  `color-scheme: light` rendered white). No automated test covers it,
+  because Playwright cannot see inside Chrome's PDF viewer.
+- PR #74: this handoff recorded the deployment check above.
+- PR #72 (progress notes from 2026-11-05): closed unmerged, superseded by #74.
+- PR #75: `develop → main` release of #73 and #74.
+
+Not yet checked: the fix inside the real app on production, by a person in
+dark mode.
+
+## Next
+
+- Keep-awake job (branch `quan-keep-supabase-awake`): `GET /api/health/db`
+  runs `SELECT 1`, and `.github/workflows/keep-supabase-awake.yaml` calls
+  it daily at 02:17 UTC, so the free Supabase project never reaches 7 idle
+  days. When the database is already paused, the job fails and GitHub
+  emails the owner. It only runs once it is on `main`. Not yet verified:
+  that a query through the pooler counts as activity for Supabase. Check
+  that the project is still awake after 7+ days.
+- Still open: the app cannot start at all without the database. Letting it
+  start, with only the signed-in features failing, would keep the landing
+  page up.
+- This machine has no global git identity. Commits made here pass
+  `-c user.name=... -c user.email=...` with the author of the earlier commits.
 
 ## Status on 2026-10-20: back up, on Supabase
 
